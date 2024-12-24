@@ -2,14 +2,30 @@ name: Publish to npm
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - "package.json"
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check version change
+        id: check
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "version=v$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          git fetch --tags
+          if git rev-parse "v$PACKAGE_VERSION" >/dev/null 2>&1; then
+            echo "Version v$PACKAGE_VERSION already exists, skipping..."
+            exit 78
+          fi
 
       - uses: oven-sh/setup-bun@v1
         with:
@@ -21,6 +37,11 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Create Git Tag
+        run: |
+          git tag ${{ steps.check.outputs.version }}
+          git push origin ${{ steps.check.outputs.version }}
+
       - name: Setup npm
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
@@ -29,3 +50,12 @@ jobs:
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.check.outputs.version }}
+          tag_name: ${{ steps.check.outputs.version }}
+          generate_release_notes: true
