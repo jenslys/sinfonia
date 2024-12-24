@@ -1,0 +1,33 @@
+{
+  "name": "sinfonia",
+  "version": "1.0.0",
+  "description": "A beautiful process runner for parallel commands with interactive filtering",
+  "module": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "sinfonia": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "start": "bun run dist/index.js",
+    "dev": "bun run --watch src/index.ts",
+    "format": "prettier --write .",
+    "test:counter": "bun test.js test1",
+    "test:random": "bun test.js test2",
+    "test:time": "bun test.js test3",
+    "test:all": "bun run src/index.ts \"counter=bun test.js test1\" \"random=bun test.js test2\" \"time=bun test.js test3\""
+  },
+  "keywords": ["cli", "process-manager", "parallel", "terminal", "interactive"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "@types/node": "^20.10.5",
+    "bun-types": "latest",
+    "prettier": "^3.1.1",
+    "typescript": "^5.3.3"
+  }
+}
