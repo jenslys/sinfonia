@@ -297,7 +297,16 @@ export class ProcessManager {
 
     this.commands.forEach(({ name, cmd, color }) => {
       const [command, ...args] = cmd.split(" ");
-      const proc = spawn(command, args, { shell: true });
+      const proc = spawn(cmd, [], {
+        shell: true,
+        env: {
+          ...process.env,
+          FORCE_COLOR: "true",
+          NODE_ENV: "development",
+          TERM: "xterm-256color",
+        },
+        stdio: ["inherit", "pipe", "pipe"],
+      });
       this.processes[name] = proc;
 
       proc.stdout?.on("data", (data) => {
