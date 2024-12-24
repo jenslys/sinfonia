@@ -305,10 +305,14 @@ export class ProcessManager {
           NODE_ENV: "development",
           TERM: "xterm-256color",
         },
-        stdio: ["inherit", "pipe", "pipe"],
+        stdio: "pipe",
         cwd: process.cwd(),
       });
       this.processes[name] = proc;
+
+      proc.stdin?.on("error", (error) => {
+        this.addLog(name, `stdin error: ${error.message}`, color);
+      });
 
       proc.stdout?.on("data", (data) => {
         const logData = data.toString();
@@ -319,6 +323,32 @@ export class ProcessManager {
         const logData = data.toString();
         this.addLog(name, logData, color);
       });
+
+      proc.on("error", (error) => {
+        this.addLog(name, `Process error: ${error.message}`, color);
+        if (error.message.includes("ENOENT")) {
+          this.addLog(
+            name,
+            `Command '${command}' not found. Is it installed?`,
+            color
+          );
+        }
+      });
+
+      proc.on("exit", (code, signal) => {
+        if (code !== null) {
+          this.addLog(name, `Process exited with code ${code}`, color);
+        } else if (signal !== null) {
+          this.addLog(name, `Process killed with signal ${signal}`, color);
+        }
+      });
+
+      // Check if process started successfully
+      setTimeout(() => {
+        if (!proc.killed && proc.exitCode === null) {
+          this.addLog(name, `Process started with PID ${proc.pid}`, color);
+        }
+      }, 100);
     });
 
     process.on("SIGINT", () => {
