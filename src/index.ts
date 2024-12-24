@@ -305,14 +305,10 @@ export class ProcessManager {
           NODE_ENV: "development",
           TERM: "xterm-256color",
         },
-        stdio: "pipe",
+        stdio: ["inherit", "pipe", "pipe"],
         cwd: process.cwd(),
       });
       this.processes[name] = proc;
-
-      proc.stdin?.on("error", (error) => {
-        this.addLog(name, `stdin error: ${error.message}`, color);
-      });
 
       proc.stdout?.on("data", (data) => {
         const logData = data.toString();
