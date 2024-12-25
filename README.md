@@ -1,6 +1,7 @@
 # sinfonia 🎵
 
 A beautiful process runner for parallel commands with interactive filtering.
+![CleanShot 2024-12-25 at 16 40 12@2x](https://github.com/user-attachments/assets/0a28bc72-99ab-4f48-895b-0879b0561395)
 
 ## Features
 
@@ -56,4 +57,4 @@ bun run build
 
 ## License
 
-ISC
+MIT
