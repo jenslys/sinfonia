@@ -49,6 +49,9 @@ export class ProcessManager {
   private isWritingLogs = false;
   private logFlushInterval: NodeJS.Timer | null = null;
   private logPromiseQueue: Promise<void> = Promise.resolve();
+  private searchMode = false;
+  private searchText = "";
+  private searchBuffer = "";
 
   constructor(
     commands: Command[],
@@ -289,6 +292,15 @@ export class ProcessManager {
         }));
       }
 
+      // Add search filtering
+      if (this.searchText) {
+        logs = logs.filter(
+          (log) =>
+            log.data.toLowerCase().includes(this.searchText.toLowerCase()) ||
+            log.name.toLowerCase().includes(this.searchText.toLowerCase())
+        );
+      }
+
       const maxVisible = (process.stdout.rows || 24) - 2;
       const visibleLogs = logs.slice(-maxVisible);
 
@@ -358,6 +370,15 @@ export class ProcessManager {
     this.updateScreen();
   }
 
+  private toggleSearch(): void {
+    this.searchMode = !this.searchMode;
+    if (!this.searchMode) {
+      this.searchText = "";
+      this.searchBuffer = "";
+    }
+    this.updateScreen();
+  }
+
   private drawControlPanel(): void {
     const terminalHeight = process.stdout.rows || 24;
 
@@ -369,7 +390,8 @@ export class ProcessManager {
     process.stdout.write(`\x1B[3;2H[↑/↓] Filter Output`);
     process.stdout.write(`\x1B[4;2H[r] Restart Process/Group`);
     process.stdout.write(`\x1B[5;2H[s] Stop/Start`);
-    process.stdout.write(`\x1B[6;2H[Ctrl+C] Exit`);
+    process.stdout.write(`\x1B[6;2H[f] Search/Filter`);
+    process.stdout.write(`\x1B[7;2H[Ctrl+C] Exit`);
 
     process.stdout.write(`\x1B[9;1H\x1b[7m Available Processes \x1b[0m`);
 
@@ -432,6 +454,39 @@ export class ProcessManager {
       );
       currentLine++;
     });
+
+    // Add search box display (after the process list)
+    if (this.searchMode) {
+      const searchPrompt = "Search: ";
+      const searchY = process.stdout.rows - 4; // Move up to make room for border
+
+      // Draw search box border and instructions
+      process.stdout.write(
+        `\x1B[${searchY};2H┌${"─".repeat(PANEL_WIDTH - 4)}┐`
+      );
+      process.stdout.write(
+        `\x1B[${searchY + 1};2H│ ${searchPrompt}${this.searchBuffer}${" ".repeat(PANEL_WIDTH - 4 - searchPrompt.length - this.searchBuffer.length - 2)} │`
+      );
+      process.stdout.write(
+        `\x1B[${searchY + 2};2H└${"─".repeat(PANEL_WIDTH - 4)}┘`
+      );
+      process.stdout.write(
+        `\x1B[${searchY + 3};2H\x1b[90m[Enter] Submit · [Esc] Cancel\x1b[0m`
+      );
+
+      // Position cursor inside search box
+      process.stdout.write(
+        `\x1B[${searchY + 1};${4 + searchPrompt.length + this.searchBuffer.length}H`
+      );
+    }
+
+    // If there's an active search, show it above the search box
+    if (this.searchText) {
+      const filterY = process.stdout.rows - 5; // Move up above search box
+      process.stdout.write(
+        `\x1B[${filterY};2H\x1b[33mFilter: ${this.searchText}\x1b[0m`
+      );
+    }
   }
 
   private clearScreen(): void {
@@ -741,6 +796,38 @@ export class ProcessManager {
     });
 
     process.stdin.on("keypress", (str, key) => {
+      if (this.searchMode) {
+        if (key.name === "escape" || (key.ctrl && key.name === "c")) {
+          this.toggleSearch();
+          return;
+        }
+
+        if (key.name === "return") {
+          this.searchText = this.searchBuffer;
+          this.updateScreen();
+          return;
+        }
+
+        if (key.name === "backspace") {
+          this.searchBuffer = this.searchBuffer.slice(0, -1);
+          this.updateScreen();
+          return;
+        }
+
+        if (str && !key.ctrl) {
+          this.searchBuffer += str;
+          this.updateScreen();
+          return;
+        }
+
+        return;
+      }
+
+      if (key.name === "f") {
+        this.toggleSearch();
+        return;
+      }
+
       if (key.ctrl && key.name === "c") {
         this.cleanup();
       }

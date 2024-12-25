@@ -13,6 +13,7 @@ A beautiful process runner for parallel commands with interactive filtering and 
 - 🚀 Run multiple commands in parallel with a single terminal window
 - 👥 Group related processes for better organization
 - 🎯 Filter and focus on specific process or group outputs using arrow keys
+- 🎨 Search through logs and process names in real-time
 - 🎨 Color-coded outputs for easy process identification
 - ⌨️ Interactive process/group control (start/stop/restart)
 - 📊 Real-time output monitoring
@@ -216,6 +217,7 @@ sinfonia -l "output_{timestamp}.log" "web=npm run dev" "api=npm run server"
 | `↑/↓`    | Navigate processes/groups |
 | `r`      | Restart process/group |
 | `s`      | Stop/Start process/group |
+| `f`      | Search in logs |
 | `Ctrl+C` | Exit all processes   |
 
 ## Preview
