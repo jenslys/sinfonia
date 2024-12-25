@@ -181,7 +181,26 @@ export class ProcessManager {
 
     lines.forEach((line) => {
       if (line.length > 0) {
-        const truncatedLine = line.slice(0, maxWidth);
+        // Strip ANSI escape codes for length calculation
+        const strippedLine = line.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+
+        // Find position in original line that corresponds to maxWidth visible chars
+        let visibleChars = 0;
+        let pos = 0;
+        let inEscSeq = false;
+
+        while (visibleChars < maxWidth && pos < line.length) {
+          if (line[pos] === "\x1B") {
+            inEscSeq = true;
+          } else if (inEscSeq && /[a-zA-Z]/.test(line[pos])) {
+            inEscSeq = false;
+          } else if (!inEscSeq) {
+            visibleChars++;
+          }
+          pos++;
+        }
+
+        const truncatedLine = line.slice(0, pos);
         process.stdout.write(
           `\x1B[${this.currentLogLine};${PANEL_WIDTH + 2}H${truncatedLine}`
         );
