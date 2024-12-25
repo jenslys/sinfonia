@@ -10,6 +10,7 @@ export class ProcessManager {
   private currentFilter: string | null = null;
   private currentLogLine = 1;
   private processes: Processes = {};
+  private processStates: { [key: string]: "running" | "stopped" } = {};
   private commands: Command[];
   private logBuffers: {
     [key: string]: { data: string; color: string; timestamp: number }[];
@@ -23,6 +24,7 @@ export class ProcessManager {
     this.maxLogsPerProcess = maxLogsPerProcess;
     commands.forEach(({ name }) => {
       this.logBuffers[name] = [];
+      this.processStates[name] = "running";
     });
   }
 
@@ -39,13 +41,11 @@ export class ProcessManager {
     this.isCleaningUp = true;
 
     try {
-      // Reset terminal state
       process.stdout.write("\x1B[?25h"); // Show cursor
       process.stdout.write("\x1B[2J"); // Clear screen
       process.stdout.write("\x1B[H"); // Move to home position
       process.stdout.write("\x1B[0m"); // Reset all attributes
 
-      // Kill all processes
       Object.values(this.processes).forEach((proc) => {
         try {
           proc.kill("SIGTERM");
@@ -158,13 +158,15 @@ export class ProcessManager {
 
     process.stdout.write(`\x1B[1;1H\x1b[7m Controls \x1b[0m`);
     process.stdout.write(`\x1B[3;2H[↑/↓] Filter Output`);
-    process.stdout.write(`\x1B[4;2H[Ctrl+C] Exit`);
+    process.stdout.write(`\x1B[4;2H[r] Restart Process`);
+    process.stdout.write(`\x1B[5;2H[s] Stop/Start`);
+    process.stdout.write(`\x1B[6;2H[Ctrl+C] Exit`);
 
-    process.stdout.write(`\x1B[7;1H\x1b[7m Available Filters \x1b[0m`);
+    process.stdout.write(`\x1B[9;1H\x1b[7m Available Processes \x1b[0m`);
 
     const isAllSelected = this.currentFilter === null;
     process.stdout.write(
-      `\x1B[9;2H${isAllSelected ? "▶ " : "  "}\x1b[37m${
+      `\x1B[11;2H${isAllSelected ? "▶ " : "  "}\x1b[37m${
         isAllSelected ? "\x1b[7m" : ""
       }ALL\x1b[0m`
     );
@@ -173,8 +175,11 @@ export class ProcessManager {
       const isSelected = this.currentFilter === name;
       const prefix = isSelected ? "▶ " : "  ";
       const format = isSelected ? `${color}\x1b[7m` : color;
+      const state = this.processStates[name];
+      const stateIcon = state === "running" ? "⚡" : "⏸";
+
       process.stdout.write(
-        `\x1B[${10 + index};2H${prefix}${format}${name}\x1b[0m`
+        `\x1B[${12 + index};2H${prefix}${format}${stateIcon} ${name}\x1b[0m`
       );
     });
   }
@@ -220,6 +225,88 @@ export class ProcessManager {
         this.cleanup();
       }
     }
+  }
+
+  private async startProcess(name: string): Promise<void> {
+    const command = this.commands.find((cmd) => cmd.name === name);
+    if (!command) return;
+
+    const [cmd, ...args] = command.cmd.split(" ");
+    const proc = spawn(cmd, args, {
+      shell: true,
+      env: {
+        ...process.env,
+        FORCE_COLOR: "true",
+        NODE_ENV: "development",
+        TERM: "xterm-256color",
+      },
+      stdio: ["inherit", "pipe", "pipe"],
+      cwd: process.cwd(),
+    });
+
+    this.processes[name] = proc;
+    this.processStates[name] = "running";
+    this.setupProcessHandlers(name, proc, command.color);
+  }
+
+  private setupProcessHandlers(name: string, proc: any, color: string): void {
+    proc.stdout?.on("data", (data: Buffer) => {
+      const logData = data.toString();
+      this.addLog(name, logData, color);
+    });
+
+    proc.stderr?.on("data", (data: Buffer) => {
+      const logData = data.toString();
+      this.addLog(name, logData, color);
+    });
+
+    proc.on("error", (error: Error) => {
+      this.addLog(name, `Process error: ${error.message}`, color);
+    });
+
+    proc.on("exit", (code: number | null, signal: string | null) => {
+      if (code !== null) {
+        this.addLog(name, `Process exited with code ${code}`, color);
+      } else if (signal !== null) {
+        this.addLog(name, `Process killed with signal ${signal}`, color);
+      }
+      this.processStates[name] = "stopped";
+    });
+  }
+
+  public async toggleProcess(name: string): Promise<void> {
+    if (!this.processes[name]) return;
+
+    if (this.processStates[name] === "running") {
+      this.processes[name].kill();
+      this.processStates[name] = "stopped";
+      this.addLog(
+        name,
+        "Process stopped",
+        this.commands.find((c) => c.name === name)?.color || ""
+      );
+    } else {
+      await this.startProcess(name);
+      this.addLog(
+        name,
+        "Process started",
+        this.commands.find((c) => c.name === name)?.color || ""
+      );
+    }
+    this.updateScreen();
+  }
+
+  public async restartProcess(name: string): Promise<void> {
+    if (!this.processes[name]) return;
+
+    this.processes[name].kill();
+    await this.startProcess(name);
+    this.addLog(
+      name,
+      "Process restarted",
+      this.commands.find((c) => c.name === name)?.color || ""
+    );
+    this.updateScreen();
   }
 
   public start(): void {
@@ -292,6 +379,15 @@ export class ProcessManager {
               : this.commands[0].name;
         }
         this.updateScreen();
+      }
+
+      // Add process control handlers
+      if (key.name === "r" && this.currentFilter) {
+        this.restartProcess(this.currentFilter);
+      }
+
+      if (key.name === "s" && this.currentFilter) {
+        this.toggleProcess(this.currentFilter);
       }
     });
 
