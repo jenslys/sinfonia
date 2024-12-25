@@ -1,16 +1,23 @@
 #!/usr/bin/env bun
 import { spawn } from "child_process";
 import readline from "readline";
-import { Command, Processes, Group } from "./types/index.js";
+import { Command, Processes, Group, ReadyPatterns } from "./types/index.js";
 import { program } from "commander";
 
 const PANEL_WIDTH = 30;
 
+/**
+ * Manages multiple concurrent processes with dependencies, logging, and interactive filtering.
+ * Provides a terminal UI for monitoring and controlling processes.
+ */
 export class ProcessManager {
   private currentFilter: string | null = null;
   private currentLogLine = 1;
   private processes: Processes = {};
   private processStates: { [key: string]: "running" | "stopped" } = {};
+  private processReady: { [key: string]: boolean } = {};
+  private dependencyReady: { [key: string]: { [dep: string]: boolean } } = {};
+  private pendingProcesses: Set<string> = new Set();
   private commands: Command[];
   private groups: Group[];
   private logBuffers: {
@@ -66,6 +73,12 @@ export class ProcessManager {
     }
   }
 
+  /**
+   * Adds a log entry for a specific process and updates the screen if necessary.
+   * @param name - The name of the process
+   * @param data - The log data to add
+   * @param color - ANSI color code for the log entry
+   */
   private addLog(name: string, data: string, color: string): void {
     const buffer = this.logBuffers[name];
     buffer.push({ data, color, timestamp: Date.now() });
@@ -88,6 +101,10 @@ export class ProcessManager {
     }
   }
 
+  /**
+   * Updates the terminal display with the current state of processes and logs.
+   * Handles filtering and layout of the control panel and log output.
+   */
   private updateScreen(): void {
     if (this.isUpdating || this.isCleaningUp) return;
     this.isUpdating = true;
@@ -297,9 +314,36 @@ export class ProcessManager {
     }
   }
 
+  /**
+   * Starts a process and sets up its event handlers.
+   * Handles process dependencies and ready patterns.
+   * @param name - Name of the process to start
+   */
   private async startProcess(name: string): Promise<void> {
     const command = this.commands.find((cmd) => cmd.name === name);
     if (!command) return;
+
+    // Check dependencies
+    if (command.dependsOn?.length) {
+      const unreadyDeps = command.dependsOn.filter((dep) => {
+        // If dependency has a ready pattern, check if it's ready
+        if (command.readyPatterns?.[dep]) {
+          return !this.dependencyReady[name]?.[dep];
+        }
+        // If no ready pattern, just check if process is running
+        return !this.processReady[dep];
+      });
+
+      if (unreadyDeps.length > 0) {
+        this.pendingProcesses.add(name);
+        this.addLog(
+          name,
+          `Waiting for dependencies: ${unreadyDeps.join(", ")}`,
+          command.color
+        );
+        return;
+      }
+    }
 
     const [cmd, ...args] = command.cmd.split(" ");
     const proc = spawn(cmd, args, {
@@ -316,13 +360,37 @@ export class ProcessManager {
 
     this.processes[name] = proc;
     this.processStates[name] = "running";
+    this.processReady[name] = !command.readyPatterns; // Ready immediately if no patterns
     this.setupProcessHandlers(name, proc, command.color);
   }
 
+  /**
+   * Sets up stdout, stderr and exit handlers for a process.
+   * Manages ready patterns and dependency tracking.
+   * @param name - Name of the process
+   * @param proc - The spawned child process
+   * @param color - ANSI color code for process output
+   */
   private setupProcessHandlers(name: string, proc: any, color: string): void {
+    const command = this.commands.find((cmd) => cmd.name === name);
+
     proc.stdout?.on("data", (data: Buffer) => {
       const logData = data.toString();
       this.addLog(name, logData, color);
+
+      // Check output against ready patterns of processes depending on this one
+      this.commands.forEach((cmd) => {
+        if (cmd.dependsOn?.includes(name) && cmd.readyPatterns?.[name]) {
+          const pattern = new RegExp(cmd.readyPatterns[name]);
+          if (pattern.test(logData)) {
+            this.dependencyReady[cmd.name] =
+              this.dependencyReady[cmd.name] || {};
+            this.dependencyReady[cmd.name][name] = true;
+            this.addLog(cmd.name, `Dependency ${name} is ready`, cmd.color);
+            this.startPendingProcesses();
+          }
+        }
+      });
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
@@ -341,7 +409,38 @@ export class ProcessManager {
         this.addLog(name, `Process killed with signal ${signal}`, color);
       }
       this.processStates[name] = "stopped";
+      this.processReady[name] = false;
+
+      // Reset dependency ready states
+      Object.keys(this.dependencyReady).forEach((cmdName) => {
+        if (this.dependencyReady[cmdName][name]) {
+          this.dependencyReady[cmdName][name] = false;
+        }
+      });
     });
+  }
+
+  /**
+   * Checks and starts any pending processes whose dependencies are now satisfied.
+   */
+  private async startPendingProcesses(): Promise<void> {
+    for (const name of this.pendingProcesses) {
+      const command = this.commands.find((cmd) => cmd.name === name);
+      if (!command) continue;
+
+      const unreadyDeps =
+        command.dependsOn?.filter((dep) => {
+          if (command.readyPatterns?.[dep]) {
+            return !this.dependencyReady[name]?.[dep];
+          }
+          return !this.processReady[dep];
+        }) || [];
+
+      if (unreadyDeps.length === 0) {
+        this.pendingProcesses.delete(name);
+        await this.startProcess(name);
+      }
+    }
   }
 
   public async toggleProcess(name: string): Promise<void> {
@@ -526,56 +625,12 @@ export class ProcessManager {
       }
     });
 
-    this.commands.forEach(({ name, cmd, color }) => {
-      const [command, ...args] = cmd.split(" ");
-      const proc = spawn(command, args, {
-        shell: true,
-        env: {
-          ...process.env,
-          FORCE_COLOR: "true",
-          NODE_ENV: "development",
-          TERM: "xterm-256color",
-        },
-        stdio: ["inherit", "pipe", "pipe"],
-        cwd: process.cwd(),
-      });
-      this.processes[name] = proc;
+    // Sort commands by dependencies
+    const sortedCommands = this.sortCommandsByDependencies();
 
-      proc.stdout?.on("data", (data) => {
-        const logData = data.toString();
-        this.addLog(name, logData, color);
-      });
-
-      proc.stderr?.on("data", (data) => {
-        const logData = data.toString();
-        this.addLog(name, logData, color);
-      });
-
-      proc.on("error", (error) => {
-        this.addLog(name, `Process error: ${error.message}`, color);
-        if (error.message.includes("ENOENT")) {
-          this.addLog(
-            name,
-            `Command '${command}' not found. Is it installed?`,
-            color
-          );
-        }
-      });
-
-      proc.on("exit", (code, signal) => {
-        if (code !== null) {
-          this.addLog(name, `Process exited with code ${code}`, color);
-        } else if (signal !== null) {
-          this.addLog(name, `Process killed with signal ${signal}`, color);
-        }
-      });
-
-      // Check if process started successfully
-      setTimeout(() => {
-        if (!proc.killed && proc.exitCode === null) {
-          this.addLog(name, `Process started with PID ${proc.pid}`, color);
-        }
-      }, 100);
+    // Start processes in dependency order
+    sortedCommands.forEach(({ name }) => {
+      this.startProcess(name);
     });
 
     process.on("SIGINT", () => {
@@ -594,6 +649,55 @@ export class ProcessManager {
     this.clearScreen();
     this.drawControlPanel();
   }
+
+  /**
+   * Sorts commands topologically based on their dependencies.
+   * @returns Sorted array of commands in dependency order
+   */
+  private sortCommandsByDependencies(): Command[] {
+    const visited = new Set<string>();
+    const sorted: Command[] = [];
+
+    const visit = (command: Command) => {
+      if (visited.has(command.name)) return;
+      visited.add(command.name);
+
+      command.dependsOn?.forEach((dep) => {
+        const depCommand = this.commands.find((cmd) => cmd.name === dep);
+        if (depCommand) visit(depCommand);
+      });
+
+      sorted.push(command);
+    };
+
+    this.commands.forEach((command) => visit(command));
+    return sorted;
+  }
+}
+
+/**
+ * Parses ready patterns from a string format into a ReadyPatterns object.
+ * Format: {dep1: 'pattern1', dep2: 'pattern2'}
+ * @param patternsStr - String containing ready patterns
+ * @returns Parsed ReadyPatterns object or undefined if parsing fails
+ */
+function parseReadyPatterns(patternsStr: string): ReadyPatterns | undefined {
+  try {
+    // Remove leading/trailing whitespace and braces
+    const cleaned = patternsStr.trim().replace(/^\{|\}$/g, "");
+    // Split by commas not inside quotes
+    const pairs = cleaned.split(/,(?=(?:[^']*'[^']*')*[^']*$)/);
+
+    const patterns: ReadyPatterns = {};
+    pairs.forEach((pair) => {
+      const [key, value] = pair.split(":").map((s) => s.trim());
+      // Remove quotes and whitespace
+      patterns[key] = value.replace(/^'|'$/g, "");
+    });
+    return patterns;
+  } catch (e) {
+    return undefined;
+  }
 }
 
 // Run CLI directly
@@ -601,7 +705,10 @@ program
   .name("sinfonia")
   .description("Run multiple commands in parallel with interactive filtering")
   .version("1.0.0")
-  .argument("<commands...>", "Commands to run (format: [GROUP:]NAME=COMMAND)")
+  .argument(
+    "<commands...>",
+    "Commands to run (format: [GROUP:]NAME[@DEP1,DEP2]=COMMAND[:: {DEP1: 'pattern', DEP2: 'pattern'}])"
+  )
   .option(
     "-c, --color <colors>",
     "Colors for each command (comma-separated)",
@@ -622,10 +729,23 @@ program
     let colorIndex = 0;
 
     commands.forEach((cmd) => {
-      const [nameWithGroup, ...cmdParts] = cmd.split("=");
-      const [groupName, name] = nameWithGroup.includes(":")
-        ? nameWithGroup.split(":")
-        : [undefined, nameWithGroup];
+      // Split into parts: nameWithGroup=command :: patterns
+      const [nameAndCmd, patternsStr] = cmd.split(" :: ");
+      const [nameWithGroup, command] = nameAndCmd.split("=");
+
+      // Parse dependencies
+      const [fullName, depsStr] = nameWithGroup.split("@");
+      const deps = depsStr?.split(",").filter(Boolean);
+
+      // Parse group and name
+      const [groupName, name] = fullName.includes(":")
+        ? fullName.split(":")
+        : [undefined, fullName];
+
+      // Parse ready patterns if they exist
+      const readyPatterns = patternsStr
+        ? parseReadyPatterns(patternsStr)
+        : undefined;
 
       if (groupName) {
         let group = groups.find((g) => g.name === groupName.toUpperCase());
@@ -642,9 +762,11 @@ program
 
       parsedCommands.push({
         name: name.toUpperCase(),
-        cmd: cmdParts.join("="),
+        cmd: command,
         color: colors[colorIndex++ % colors.length],
         group: groupName?.toUpperCase(),
+        dependsOn: deps?.map((d) => d.toUpperCase()),
+        readyPatterns,
       });
     });
 
@@ -659,6 +781,11 @@ program
     manager.start();
   });
 
+/**
+ * Maps color names to ANSI color codes.
+ * @param color - Name of the color
+ * @returns ANSI color code string
+ */
 function getColorCode(color: string): string {
   const codes: Record<string, string> = {
     black: "30",

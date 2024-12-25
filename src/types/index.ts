@@ -1,10 +1,16 @@
 import { ChildProcess } from "child_process";
 
+export interface ReadyPatterns {
+  [key: string]: string;
+}
+
 export interface Command {
   name: string;
   cmd: string;
   color: string;
   group?: string;
+  dependsOn?: string[];
+  readyPatterns?: ReadyPatterns;
 }
 
 export interface Group {

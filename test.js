@@ -20,6 +20,39 @@ const test3 = () => {
   }, 1500);
 };
 
+// Test script 4 - simulates a database startup
+const test4 = () => {
+  console.log("Database starting...");
+  setTimeout(() => {
+    console.log("Database ready!");
+    setInterval(() => {
+      console.log("Database: Processing queries...");
+    }, 2000);
+  }, 3000);
+};
+
+// Test script 5 - simulates an API server that depends on database
+const test5 = () => {
+  console.log("API server starting...");
+  setTimeout(() => {
+    console.log("API server ready on port 3000!");
+    setInterval(() => {
+      console.log("API: Processing requests...");
+    }, 1500);
+  }, 2000);
+};
+
+// Test script 6 - simulates a frontend that depends on API
+const test6 = () => {
+  console.log("Frontend starting...");
+  setTimeout(() => {
+    console.log("Frontend dev server ready!");
+    setInterval(() => {
+      console.log("Frontend: Compiling changes...");
+    }, 3000);
+  }, 1500);
+};
+
 // Run the one specified by argument
 const script = process.argv[2];
 switch (script) {
@@ -32,7 +65,16 @@ switch (script) {
   case "test3":
     test3();
     break;
+  case "test4":
+    test4();
+    break;
+  case "test5":
+    test5();
+    break;
+  case "test6":
+    test6();
+    break;
   default:
-    console.error("Please specify test1, test2, or test3");
+    console.error("Please specify test1-6");
     process.exit(1);
 }

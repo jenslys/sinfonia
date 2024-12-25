@@ -1,6 +1,6 @@
 {
   "name": "sinfonia",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A beautiful process runner for parallel commands with interactive filtering",
   "module": "dist/index.js",
   "type": "module",
@@ -16,7 +16,8 @@
     "test:random": "bun test.js test2",
     "test:time": "bun test.js test3",
     "test:all": "bun run src/index.ts \"counter=bun test.js test1\" \"random=bun test.js test2\" \"time=bun test.js test3\"",
-    "test:groups": "bun run src/index.ts \"timers:counter=bun test.js test1\" \"timers:time=bun test.js test3\" \"random:gen1=bun test.js test2\" \"random:gen2=bun test.js test2\""
+    "test:groups": "bun run src/index.ts \"timers:counter=bun test.js test1\" \"timers:time=bun test.js test3\" \"random:gen1=bun test.js test2\" \"random:gen2=bun test.js test2\"",
+    "test:deps": "bun run src/index.ts \"db=bun test.js test4\" \"api@db=bun test.js test5 :: {db: 'Database ready!'}\" \"web@api=bun test.js test6 :: {api: 'API server ready on port 3000!'}\""
   },
   "keywords": ["cli", "process-manager", "parallel", "terminal", "interactive"],
   "author": "",
