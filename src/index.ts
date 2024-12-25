@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 import { spawn } from "child_process";
 import readline from "readline";
-import { Command, Processes } from "./types/index.js";
+import { Command, Processes, Group } from "./types/index.js";
 import { program } from "commander";
 
-const PANEL_WIDTH = 25;
+const PANEL_WIDTH = 30;
 
 export class ProcessManager {
   private currentFilter: string | null = null;
@@ -12,6 +12,7 @@ export class ProcessManager {
   private processes: Processes = {};
   private processStates: { [key: string]: "running" | "stopped" } = {};
   private commands: Command[];
+  private groups: Group[];
   private logBuffers: {
     [key: string]: { data: string; color: string; timestamp: number }[];
   } = {};
@@ -19,8 +20,13 @@ export class ProcessManager {
   private isCleaningUp = false;
   private isUpdating = false;
 
-  constructor(commands: Command[], maxLogsPerProcess = 100) {
+  constructor(
+    commands: Command[],
+    groups: Group[] = [],
+    maxLogsPerProcess = 100
+  ) {
     this.commands = commands;
+    this.groups = groups;
     this.maxLogsPerProcess = maxLogsPerProcess;
     commands.forEach(({ name }) => {
       this.logBuffers[name] = [];
@@ -69,7 +75,14 @@ export class ProcessManager {
 
     if (
       !this.isUpdating &&
-      (!this.currentFilter || this.currentFilter === name)
+      (!this.currentFilter ||
+        this.currentFilter === name ||
+        (this.currentFilter.startsWith("group:") &&
+          this.groups.find(
+            (g) =>
+              `group:${g.name}` === this.currentFilter &&
+              g.commands.includes(name)
+          )))
     ) {
       this.updateScreen();
     }
@@ -102,6 +115,22 @@ export class ProcessManager {
             }))
           )
           .sort((a, b) => a.timestamp - b.timestamp);
+      } else if (this.currentFilter.startsWith("group:")) {
+        const groupName = this.currentFilter.replace("group:", "");
+        const group = this.groups.find((g) => g.name === groupName);
+        if (group) {
+          logs = Object.entries(this.logBuffers)
+            .filter(([name]) => group.commands.includes(name))
+            .flatMap(([name, logs]) =>
+              logs.map((log) => ({
+                name: name as string,
+                data: log.data,
+                color: log.color,
+                timestamp: log.timestamp,
+              }))
+            )
+            .sort((a, b) => a.timestamp - b.timestamp);
+        }
       } else {
         logs = (this.logBuffers[this.currentFilter] || []).map((log) => ({
           name: this.currentFilter as string,
@@ -158,7 +187,7 @@ export class ProcessManager {
 
     process.stdout.write(`\x1B[1;1H\x1b[7m Controls \x1b[0m`);
     process.stdout.write(`\x1B[3;2H[↑/↓] Filter Output`);
-    process.stdout.write(`\x1B[4;2H[r] Restart Process`);
+    process.stdout.write(`\x1B[4;2H[r] Restart Process/Group`);
     process.stdout.write(`\x1B[5;2H[s] Stop/Start`);
     process.stdout.write(`\x1B[6;2H[Ctrl+C] Exit`);
 
@@ -171,7 +200,47 @@ export class ProcessManager {
       }ALL\x1b[0m`
     );
 
-    this.commands.forEach(({ name, color }, index) => {
+    let currentLine = 12;
+
+    // Draw groups
+    this.groups.forEach((group) => {
+      const isSelected = this.currentFilter === `group:${group.name}`;
+      const prefix = isSelected ? "▶ " : "  ";
+      const format = isSelected ? `${group.color}\x1b[7m` : group.color;
+      const allRunning = group.commands.every(
+        (cmd) => this.processStates[cmd] === "running"
+      );
+      const allStopped = group.commands.every(
+        (cmd) => this.processStates[cmd] === "stopped"
+      );
+      const stateIcon = allRunning ? "⚡" : allStopped ? "⏸" : "⚡⏸";
+
+      process.stdout.write(
+        `\x1B[${currentLine};2H${prefix}${format}${stateIcon} [${group.name}]\x1b[0m`
+      );
+      currentLine++;
+
+      // Draw group members indented
+      group.commands.forEach((cmdName) => {
+        const cmd = this.commands.find((c) => c.name === cmdName);
+        if (cmd) {
+          const isSelected = this.currentFilter === cmdName;
+          const prefix = isSelected ? "▶ " : "  ";
+          const format = isSelected ? `${cmd.color}\x1b[7m` : cmd.color;
+          const state = this.processStates[cmdName];
+          const stateIcon = state === "running" ? "⚡" : "⏸";
+
+          process.stdout.write(
+            `\x1B[${currentLine};4H${prefix}${format}${stateIcon} ${cmdName}\x1b[0m`
+          );
+          currentLine++;
+        }
+      });
+    });
+
+    // Draw ungrouped commands
+    const ungroupedCommands = this.commands.filter((cmd) => !cmd.group);
+    ungroupedCommands.forEach(({ name, color }) => {
       const isSelected = this.currentFilter === name;
       const prefix = isSelected ? "▶ " : "  ";
       const format = isSelected ? `${color}\x1b[7m` : color;
@@ -179,8 +248,9 @@ export class ProcessManager {
       const stateIcon = state === "running" ? "⚡" : "⏸";
 
       process.stdout.write(
-        `\x1B[${12 + index};2H${prefix}${format}${stateIcon} ${name}\x1b[0m`
+        `\x1B[${currentLine};2H${prefix}${format}${stateIcon} ${name}\x1b[0m`
       );
+      currentLine++;
     });
   }
 
@@ -309,6 +379,55 @@ export class ProcessManager {
     this.updateScreen();
   }
 
+  private async toggleGroup(groupName: string): Promise<void> {
+    const group = this.groups.find((g) => g.name === groupName);
+    if (!group) return;
+
+    const allRunning = group.commands.every(
+      (cmd) => this.processStates[cmd] === "running"
+    );
+
+    for (const cmdName of group.commands) {
+      if (allRunning) {
+        if (this.processes[cmdName]) {
+          this.processes[cmdName].kill();
+          this.processStates[cmdName] = "stopped";
+          this.addLog(
+            cmdName,
+            "Process stopped",
+            this.commands.find((c) => c.name === cmdName)?.color || ""
+          );
+        }
+      } else {
+        await this.startProcess(cmdName);
+        this.addLog(
+          cmdName,
+          "Process started",
+          this.commands.find((c) => c.name === cmdName)?.color || ""
+        );
+      }
+    }
+    this.updateScreen();
+  }
+
+  private async restartGroup(groupName: string): Promise<void> {
+    const group = this.groups.find((g) => g.name === groupName);
+    if (!group) return;
+
+    for (const cmdName of group.commands) {
+      if (this.processes[cmdName]) {
+        this.processes[cmdName].kill();
+        await this.startProcess(cmdName);
+        this.addLog(
+          cmdName,
+          "Process restarted",
+          this.commands.find((c) => c.name === cmdName)?.color || ""
+        );
+      }
+    }
+    this.updateScreen();
+  }
+
   public start(): void {
     // Ensure raw mode and handle its errors
     const enableRawMode = () => {
@@ -365,29 +484,45 @@ export class ProcessManager {
       }
 
       if (key.name === "up" || key.name === "down") {
-        const currentIndex = this.currentFilter
-          ? this.commands.findIndex((c) => c.name === this.currentFilter)
-          : -1;
+        // Create a flat list of items in display order
+        const allItems = [
+          null, // ALL
+          ...this.groups.flatMap((g) => [
+            `group:${g.name}`,
+            ...g.commands.map((cmd) => cmd),
+          ]),
+          ...this.commands.filter((cmd) => !cmd.group).map((cmd) => cmd.name),
+        ];
 
+        const currentIndex = allItems.indexOf(this.currentFilter);
         if (key.name === "up") {
           this.currentFilter =
-            currentIndex > 0 ? this.commands[currentIndex - 1].name : null;
+            currentIndex > 0
+              ? allItems[currentIndex - 1]
+              : allItems[allItems.length - 1];
         } else {
           this.currentFilter =
-            currentIndex < this.commands.length - 1
-              ? this.commands[currentIndex + 1].name
-              : this.commands[0].name;
+            currentIndex < allItems.length - 1
+              ? allItems[currentIndex + 1]
+              : allItems[0];
         }
         this.updateScreen();
       }
 
-      // Add process control handlers
       if (key.name === "r" && this.currentFilter) {
-        this.restartProcess(this.currentFilter);
+        if (this.currentFilter.startsWith("group:")) {
+          this.restartGroup(this.currentFilter.replace("group:", ""));
+        } else {
+          this.restartProcess(this.currentFilter);
+        }
       }
 
       if (key.name === "s" && this.currentFilter) {
-        this.toggleProcess(this.currentFilter);
+        if (this.currentFilter.startsWith("group:")) {
+          this.toggleGroup(this.currentFilter.replace("group:", ""));
+        } else {
+          this.toggleProcess(this.currentFilter);
+        }
       }
     });
 
@@ -466,7 +601,7 @@ program
   .name("sinfonia")
   .description("Run multiple commands in parallel with interactive filtering")
   .version("1.0.0")
-  .argument("<commands...>", "Commands to run (format: NAME=COMMAND)")
+  .argument("<commands...>", "Commands to run (format: [GROUP:]NAME=COMMAND)")
   .option(
     "-c, --color <colors>",
     "Colors for each command (comma-separated)",
@@ -482,13 +617,35 @@ program
       .split(",")
       .map((c: string) => `\x1b[${getColorCode(c)}m`);
 
-    const parsedCommands: Command[] = commands.map((cmd, i) => {
-      const [name, ...cmdParts] = cmd.split("=");
-      return {
+    const groups: Group[] = [];
+    const parsedCommands: Command[] = [];
+    let colorIndex = 0;
+
+    commands.forEach((cmd) => {
+      const [nameWithGroup, ...cmdParts] = cmd.split("=");
+      const [groupName, name] = nameWithGroup.includes(":")
+        ? nameWithGroup.split(":")
+        : [undefined, nameWithGroup];
+
+      if (groupName) {
+        let group = groups.find((g) => g.name === groupName.toUpperCase());
+        if (!group) {
+          group = {
+            name: groupName.toUpperCase(),
+            color: colors[colorIndex++ % colors.length],
+            commands: [],
+          };
+          groups.push(group);
+        }
+        group.commands.push(name.toUpperCase());
+      }
+
+      parsedCommands.push({
         name: name.toUpperCase(),
         cmd: cmdParts.join("="),
-        color: colors[i % colors.length],
-      };
+        color: colors[colorIndex++ % colors.length],
+        group: groupName?.toUpperCase(),
+      });
     });
 
     const bufferSize = parseInt(options.bufferSize, 10);
@@ -498,7 +655,7 @@ program
     }
 
     console.log("Starting processes...");
-    const manager = new ProcessManager(parsedCommands, bufferSize);
+    const manager = new ProcessManager(parsedCommands, groups, bufferSize);
     manager.start();
   });
 

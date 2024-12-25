@@ -7,9 +7,10 @@ A beautiful process runner for parallel commands with interactive filtering and 
 ## Features ✨
 
 - 🚀 Run multiple commands in parallel with a single terminal window
-- 🎯 Filter and focus on specific process outputs using arrow keys
+- 👥 Group related processes for better organization
+- 🎯 Filter and focus on specific process or group outputs using arrow keys
 - 🎨 Color-coded outputs for easy process identification
-- ⌨️ Interactive process control (start/stop/restart)
+- ⌨️ Interactive process/group control (start/stop/restart)
 - 📊 Real-time output monitoring
 - 🔄 Process state management
 - 💾 Configurable output buffer size
@@ -35,17 +36,23 @@ Basic usage:
 sinfonia "NAME=COMMAND" "NAME2=COMMAND2"
 ```
 
+Using groups:
+
+```bash
+sinfonia "GROUP:NAME=COMMAND" "GROUP:NAME2=COMMAND2"
+```
+
 Real-world examples:
 
 ```bash
 # Next.js + API development
-sinfonia "next=npm run dev" "api=npm run server"
+sinfonia "frontend:next=npm run dev" "frontend:css=npm run css:watch" "backend:api=npm run server"
 
 # Full-stack development setup
-sinfonia "frontend=npm run dev" "api=npm run server" "db=docker compose up"
+sinfonia "client:app=npm run dev" "client:css=npm run css" "server:api=npm run server" "server:worker=npm run worker" "db=docker compose up"
 
 # Microservices development
-sinfonia "auth=npm run auth" "users=npm run users" "gateway=npm run gateway"
+sinfonia "auth:api=npm run auth" "auth:worker=npm run auth:worker" "users:api=npm run users" "users:worker=npm run users:worker" "gateway=npm run gateway"
 ```
 
 ### Options
@@ -62,9 +69,9 @@ sinfonia -b 200 "web=npm run dev" "api=npm run server"
 
 | Key      | Action                |
 |----------|----------------------|
-| `↑/↓`    | Filter process output |
-| `r`      | Restart current process |
-| `s`      | Stop/Start current process |
+| `↑/↓`    | Navigate processes/groups |
+| `r`      | Restart process/group |
+| `s`      | Stop/Start process/group |
 | `Ctrl+C` | Exit all processes   |
 
 ## Development 👩‍💻
@@ -80,6 +87,9 @@ bun run dev
 
 # Run test suite
 bun run test:all
+
+# Test with groups
+bun run test:groups
 
 # Build for production
 bun run build

@@ -4,6 +4,13 @@ export interface Command {
   name: string;
   cmd: string;
   color: string;
+  group?: string;
+}
+
+export interface Group {
+  name: string;
+  color: string;
+  commands: string[];
 }
 
 export interface Processes {
@@ -12,4 +19,5 @@ export interface Processes {
 
 export interface Config {
   commands: Command[];
+  groups?: Group[];
 }
