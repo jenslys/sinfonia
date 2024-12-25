@@ -1,60 +1,94 @@
 # sinfonia 🎵
 
-A beautiful process runner for parallel commands with interactive filtering.
-![CleanShot 2024-12-25 at 16 40 12@2x](https://github.com/user-attachments/assets/0a28bc72-99ab-4f48-895b-0879b0561395)
+A beautiful process runner for parallel commands with interactive filtering and real-time output control.
 
-## Features
+> **sinfonia** _(n.)_ - from Italian, meaning "symphony": a harmonious combination of elements working together as one, just like an orchestra performing multiple parts in perfect coordination.
 
-- Run multiple commands in parallel
-- Filter output by process with arrow keys
-- Color-coded output for each process
-- Interactive terminal UI
-- Easy to use command format
+## Features ✨
 
-## Installation
+- 🚀 Run multiple commands in parallel with a single terminal window
+- 🎯 Filter and focus on specific process outputs using arrow keys
+- 🎨 Color-coded outputs for easy process identification
+- ⌨️ Interactive process control (start/stop/restart)
+- 📊 Real-time output monitoring
+- 🔄 Process state management
+- 💾 Configurable output buffer size
+
+## Installation 📦
 
 ```bash
-# Install globally
+# Using bun
 bun install -g sinfonia
 
-# Or install locally
-bun install sinfonia
+# Using npm
+npm install -g sinfonia
+
+# Using yarn
+yarn global add sinfonia
 ```
 
-## Usage
+## Usage 🛠️
+
+Basic usage:
 
 ```bash
-sinfonia "name=command" "name2=command2"
+sinfonia "NAME=COMMAND" "NAME2=COMMAND2"
+```
 
-# Examples
-sinfonia "next=bun dev" "api=bun api:dev"
-sinfonia "dev=npm run dev" "api=npm run api" "db=docker compose up"
+Real-world examples:
 
+```bash
+# Next.js + API development
+sinfonia "next=npm run dev" "api=npm run server"
+
+# Full-stack development setup
+sinfonia "frontend=npm run dev" "api=npm run server" "db=docker compose up"
+
+# Microservices development
+sinfonia "auth=npm run auth" "users=npm run users" "gateway=npm run gateway"
+```
+
+### Options
+
+```bash
 # Custom colors
-sinfonia -c "red,blue,green" "next=bun dev" "api=bun api:dev"
+sinfonia -c "red,blue,green" "web=npm run dev" "api=npm run server"
+
+# Custom buffer size (default: 100 lines per process)
+sinfonia -b 200 "web=npm run dev" "api=npm run server"
 ```
 
-## Controls
+## Controls 🎮
 
-- `↑/↓` - Filter output by process
-- `Ctrl+C` - Exit all processes
+| Key      | Action                |
+|----------|----------------------|
+| `↑/↓`    | Filter process output |
+| `r`      | Restart current process |
+| `s`      | Stop/Start current process |
+| `Ctrl+C` | Exit all processes   |
 
-## Development
+## Development 👩‍💻
 
 ```bash
-# Install dependencies
+# Clone and install dependencies
+git clone https://github.com/yourusername/sinfonia.git
+cd sinfonia
 bun install
 
 # Run in development mode
 bun run dev
 
-# Run tests
+# Run test suite
 bun run test:all
 
-# Build
+# Build for production
 bun run build
 ```
 
-## License
+## Preview
 
-MIT
+![preview-screenshot](https://media.cleanshot.cloud/media/19237/ssEkSOOhpPhptEMQmvuJYH8JuprioiRt5Gk30POR.jpeg?Expires=1735168137&Signature=KqCIliVJBpjOuU3AEWXgb8TOpcG-sexSnDup2q5bAGIPh1oViF5AvLVbBZIWj7GVRhS~jHDejavruyXBqRZ0BUdXxuaR6q1CsduiSmyf0T3toyJIp1605sAo8EzM8V7CphA~xKMbnUMDPQFyRmGzb5Na6F3iGUjPQ2u8ntkHjZ05BPfhvWeQoxAcjMqFzd-RxZfSt3ny~fzt~1kiTcz02hCZQxDQStOqhR7rGzepVSbiLpHurpfjrpi94Q52chxVsUT~oajBE4RZ1hWCJGpICEKT~uy7m4rGDXh9fgy3Ux0MV5UGUG6AUSZld77uP5vu0c0pZ0mbOETfdeVIf6O8dQ__&Key-Pair-Id=K269JMAT9ZF4GZ)
+
+## License 📄
+
+[MIT](LICENSE)
