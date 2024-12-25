@@ -3,6 +3,24 @@ import { spawn } from "child_process";
 import readline from "readline";
 import { Command, Processes, Group, ReadyPatterns } from "./types/index.js";
 import { program } from "commander";
+import { appendFile } from "fs";
+import path from "path";
+
+// Format: YYYY-MM-DD_HH-mm-ss
+function formatTimestamp(date: Date = new Date()): string {
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
+function formatLogPath(logPath: string): string | null {
+  try {
+    if (!logPath) return null;
+    return `output_${formatTimestamp()}.log`;
+  } catch (error) {
+    console.error(`Failed to format log path: ${error}`);
+    return null;
+  }
+}
 
 const PANEL_WIDTH = 30;
 
@@ -26,19 +44,78 @@ export class ProcessManager {
   private maxLogsPerProcess: number;
   private isCleaningUp = false;
   private isUpdating = false;
+  private logFile: string | null = null;
+  private logQueue: string[] = [];
+  private isWritingLogs = false;
+  private logFlushInterval: NodeJS.Timer | null = null;
+  private logPromiseQueue: Promise<void> = Promise.resolve();
 
   constructor(
     commands: Command[],
     groups: Group[] = [],
-    maxLogsPerProcess = 100
+    maxLogsPerProcess = 100,
+    logFile: string | null = null
   ) {
     this.commands = commands;
     this.groups = groups;
     this.maxLogsPerProcess = maxLogsPerProcess;
+    this.logFile = logFile;
+    if (logFile && !this.logFile) {
+      console.warn(
+        "Invalid log file path provided. File logging will be disabled."
+      );
+    }
     commands.forEach(({ name }) => {
       this.logBuffers[name] = [];
       this.processStates[name] = "running";
     });
+
+    // Set up log flushing interval if logging is enabled
+    if (this.logFile) {
+      this.logFlushInterval = setInterval(() => {
+        this.logPromiseQueue = this.logPromiseQueue.then(() =>
+          this.flushLogs()
+        );
+      }, 1000);
+    }
+  }
+
+  private async queueLog(logEntry: string): Promise<void> {
+    this.logPromiseQueue = this.logPromiseQueue.then(async () => {
+      this.logQueue.push(logEntry);
+      if (this.logQueue.length > 1000) {
+        await this.flushLogs();
+      }
+    });
+  }
+
+  private async flushLogs(): Promise<void> {
+    if (this.isWritingLogs || this.logQueue.length === 0 || !this.logFile)
+      return;
+    this.isWritingLogs = true;
+
+    const logsToWrite = this.logQueue.join("");
+    this.logQueue = [];
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        appendFile(this.logFile!, logsToWrite, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    } catch (e) {
+      console.error(
+        `Failed to write to log file: ${e}. File logging will be disabled.`
+      );
+      this.logFile = null;
+      if (this.logFlushInterval) {
+        clearInterval(this.logFlushInterval);
+        this.logFlushInterval = null;
+      }
+    } finally {
+      this.isWritingLogs = false;
+    }
   }
 
   private hideCursor(): void {
@@ -54,6 +131,32 @@ export class ProcessManager {
     this.isCleaningUp = true;
 
     try {
+      if (this.logFlushInterval) {
+        clearInterval(this.logFlushInterval);
+        this.logFlushInterval = null;
+      }
+      // Final flush of any remaining logs
+      if (this.logQueue.length > 0 && this.logFile) {
+        this.logPromiseQueue
+          .then(() => this.flushLogs())
+          .finally(() => {
+            process.stdout.write("\x1B[?25h"); // Show cursor
+            process.stdout.write("\x1B[2J"); // Clear screen
+            process.stdout.write("\x1B[H"); // Move to home position
+            process.stdout.write("\x1B[0m"); // Reset all attributes
+
+            Object.values(this.processes).forEach((proc) => {
+              try {
+                proc.kill("SIGTERM");
+              } catch (e) {
+                // Ignore errors during cleanup
+              }
+            });
+            process.exit(0);
+          });
+        return;
+      }
+
       process.stdout.write("\x1B[?25h"); // Show cursor
       process.stdout.write("\x1B[2J"); // Clear screen
       process.stdout.write("\x1B[H"); // Move to home position
@@ -81,9 +184,38 @@ export class ProcessManager {
    */
   private addLog(name: string, data: string, color: string): void {
     const buffer = this.logBuffers[name];
-    buffer.push({ data, color, timestamp: Date.now() });
+    const timestamp = Date.now();
+    buffer.push({ data, color, timestamp });
     if (buffer.length > this.maxLogsPerProcess) {
       buffer.shift();
+    }
+
+    // Write to log file if enabled
+    if (this.logFile) {
+      try {
+        const cleanData = data.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trimEnd();
+        const logEntry = `[${new Date(timestamp).toISOString()}] [${name}] ${cleanData}\n`;
+        this.queueLog(logEntry).catch((e) => {
+          console.error(
+            `Failed to queue log: ${e}. File logging will be disabled.`
+          );
+          this.logFile = null;
+          if (this.logFlushInterval) {
+            clearInterval(this.logFlushInterval);
+            this.logFlushInterval = null;
+          }
+        });
+      } catch (e) {
+        // Disable logging on first error to prevent spam
+        console.error(
+          `Failed to write to log file: ${e}. File logging will be disabled.`
+        );
+        this.logFile = null;
+        if (this.logFlushInterval) {
+          clearInterval(this.logFlushInterval);
+          this.logFlushInterval = null;
+        }
+      }
     }
 
     if (
@@ -195,7 +327,19 @@ export class ProcessManager {
           } else if (inEscSeq && /[a-zA-Z]/.test(line[pos])) {
             inEscSeq = false;
           } else if (!inEscSeq) {
+            if (visibleChars + 1 > maxWidth) {
+              break;
+            }
             visibleChars++;
+          }
+          pos++;
+        }
+
+        // Ensure we don't cut in the middle of an escape sequence
+        while (pos < line.length && inEscSeq) {
+          if (/[a-zA-Z]/.test(line[pos])) {
+            pos++;
+            break;
           }
           pos++;
         }
@@ -738,6 +882,11 @@ program
     "Number of log lines to keep in memory per process",
     "100"
   )
+  .option(
+    "-l, --log-file <file>",
+    "Save logs to file (use {timestamp} for current date/time)",
+    "sinfonia_{timestamp}.log"
+  )
   .action((commands: string[], options) => {
     const colors = options.color
       .split(",")
@@ -746,6 +895,9 @@ program
     const groups: Group[] = [];
     const parsedCommands: Command[] = [];
     let colorIndex = 0;
+
+    // Format the log file path if provided
+    const logFile = options.logFile ? formatLogPath(options.logFile) : null;
 
     commands.forEach((cmd) => {
       // Split into parts: nameWithGroup=command :: patterns
@@ -796,7 +948,12 @@ program
     }
 
     console.log("Starting processes...");
-    const manager = new ProcessManager(parsedCommands, groups, bufferSize);
+    const manager = new ProcessManager(
+      parsedCommands,
+      groups,
+      bufferSize,
+      logFile
+    );
     manager.start();
   });
 

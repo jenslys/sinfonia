@@ -2,6 +2,10 @@
 
 A beautiful process runner for parallel commands with interactive filtering and real-time output control.
 
+[![npm version](https://badge.fury.io/js/sinfonia.svg)](https://badge.fury.io/js/sinfonia)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+
 > **sinfonia** _(n.)_ - from Italian, meaning "symphony": a harmonious combination of elements working together as one, just like an orchestra performing multiple parts in perfect coordination.
 
 ## Features ✨
@@ -15,6 +19,7 @@ A beautiful process runner for parallel commands with interactive filtering and 
 - 🔄 Process state management
 - 💾 Configurable output buffer size
 - 🔗 Optional dependency ordering with ready state detection
+- 📝 Automatic log file generation with customizable paths
 
 ## Installation 📦
 
@@ -134,17 +139,30 @@ sinfonia \
 
 ### Command Format
 
-```bash
-[GROUP:]NAME[@DEP1,DEP2]=COMMAND[:: {DEP1: 'pattern', DEP2: 'pattern'}]
+```text
+┌─ Optional group name
+│   ┌─ Process name
+│   │    ┌─ Optional dependencies
+│   │    │       ┌─ The command to run
+│   │    │       │
+GROUP:NAME@DEP1,DEP2=COMMAND :: {
+  DEP1: 'ready pattern for DEP1',
+  DEP2: 'ready pattern for DEP2'
+}
+└─ Optional ready patterns
 ```
 
-- `GROUP:` - Optional group name for organizing processes (e.g., `frontend:`)
-- `NAME` - Process name (e.g., `api`)
-- `@DEP1,DEP2` - Optional comma-separated dependencies (e.g., `@db,cache`)
-- `COMMAND` - The actual command to run
-- `:: {...}` - Optional JSON-like ready patterns for dependencies
+#### Components
 
-Examples:
+| Component | Description | Example |
+|-----------|-------------|---------|
+| `GROUP:` | Optional group name for organizing processes | `frontend:`, `backend:` |
+| `NAME` | Required process name | `web`, `api`, `db` |
+| `@DEP1,DEP2` | Optional comma-separated dependencies | `@db,cache,auth` |
+| `COMMAND` | The command to run | `npm run dev` |
+| `:: {...}` | Optional ready patterns for dependencies | `:: {db: 'Database ready'}` |
+
+#### Examples
 
 ```bash
 # Basic process
@@ -153,22 +171,15 @@ Examples:
 # With group
 "frontend:web=npm run dev"
 
-# With single dependency
+# With dependency
 "api@db=npm run api"
 
-# With single dependency and ready pattern
+# With ready pattern
 "api@db=npm run api :: {
   db: 'Database ready'
 }"
 
-# With multiple dependencies and ready patterns
-"api@db,cache,auth=npm run api :: {
-  db: 'Database system is ready',
-  cache: 'Ready to accept connections',
-  auth: 'Auth service started'
-}"
-
-# Everything combined
+# Full example
 "backend:api@db,cache=npm run api :: {
   db: 'Database ready',
   cache: 'Cache ready'
@@ -193,6 +204,9 @@ sinfonia -c "red,blue,green" "web=npm run dev" "api=npm run server"
 
 # Custom buffer size (default: 100 lines per process)
 sinfonia -b 200 "web=npm run dev" "api=npm run server"
+
+# Save logs to file (default: sinfonia_{timestamp}.log)
+sinfonia -l "output_{timestamp}.log" "web=npm run dev" "api=npm run server"
 ```
 
 ## Controls 🎮
