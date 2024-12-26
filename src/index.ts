@@ -138,33 +138,8 @@ export class ProcessManager {
         clearInterval(this.logFlushInterval);
         this.logFlushInterval = null;
       }
-      // Final flush of any remaining logs
-      if (this.logQueue.length > 0 && this.logFile) {
-        this.logPromiseQueue
-          .then(() => this.flushLogs())
-          .finally(() => {
-            process.stdout.write("\x1B[?25h"); // Show cursor
-            process.stdout.write("\x1B[2J"); // Clear screen
-            process.stdout.write("\x1B[H"); // Move to home position
-            process.stdout.write("\x1B[0m"); // Reset all attributes
 
-            Object.values(this.processes).forEach((proc) => {
-              try {
-                proc.kill("SIGTERM");
-              } catch (e) {
-                // Ignore errors during cleanup
-              }
-            });
-            process.exit(0);
-          });
-        return;
-      }
-
-      process.stdout.write("\x1B[?25h"); // Show cursor
-      process.stdout.write("\x1B[2J"); // Clear screen
-      process.stdout.write("\x1B[H"); // Move to home position
-      process.stdout.write("\x1B[0m"); // Reset all attributes
-
+      // Kill all processes first
       Object.values(this.processes).forEach((proc) => {
         try {
           proc.kill("SIGTERM");
@@ -172,8 +147,47 @@ export class ProcessManager {
           // Ignore errors during cleanup
         }
       });
+
+      // Reset terminal state and clear screen
+      process.stdout.write("\x1B[?25h"); // Show cursor
+      process.stdout.write("\x1B[2J"); // Clear screen
+      process.stdout.write("\x1B[3J"); // Clear scrollback
+      process.stdout.write("\x1B[H"); // Move to home
+      process.stdout.write("\x1B[0m"); // Reset all attributes
+      process.stdout.write("\x1B[!p"); // Soft reset terminal
+      process.stdout.write("\x1Bc"); // Full reset
+
+      // Display all logs in chronological order
+      const allLogs = Object.entries(this.logBuffers)
+        .flatMap(([name, logs]) =>
+          logs.map((log) => ({
+            name,
+            ...log,
+          }))
+        )
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      // Print logs in clean format
+      console.log(); // Add a blank line for readability
+      allLogs.forEach((log) => {
+        const cleanData = log.data
+          .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "")
+          .trimEnd();
+        console.log(`[${log.name}] ${cleanData}`);
+      });
+      console.log(); // Add a blank line at the end
+
+      // Final flush of any remaining logs to file
+      if (this.logQueue.length > 0 && this.logFile) {
+        this.logPromiseQueue
+          .then(() => this.flushLogs())
+          .finally(() => {
+            process.exit(0);
+          });
+        return;
+      }
     } catch (e) {
-      // Ensure we exit even if cleanup fails
+      console.error("Error during cleanup:", e);
     } finally {
       process.exit(0);
     }
