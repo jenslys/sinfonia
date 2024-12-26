@@ -1,23 +1,26 @@
 {
   "name": "sinfonia",
-  "version": "1.0.7",
+  "version": "2.0.0",
   "description": "A beautiful process runner for parallel commands with interactive filtering",
   "module": "dist/index.js",
   "type": "module",
   "bin": {
     "sinfonia": "./dist/index.js"
   },
+  "files": ["dist", "schema.json", "starter.config.json", "README.md", "LICENSE"],
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node",
     "start": "bun run dist/index.js",
     "dev": "bun run --watch src/index.ts",
-    "format": "prettier --write .",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check --write .",
     "test:counter": "bun test.js test1",
     "test:random": "bun test.js test2",
     "test:time": "bun test.js test3",
     "test:all": "bun run src/index.ts -l \"output_{timestamp}.log\" \"counter=bun test.js test1\" \"random=bun test.js test2\" \"time=bun test.js test3\"",
     "test:groups": "bun run src/index.ts \"timers:counter=bun test.js test1\" \"timers:time=bun test.js test3\" \"random:gen1=bun test.js test2\" \"random:gen2=bun test.js test2\"",
-    "test:deps": "bun run src/index.ts \"db=bun test.js test4\" \"api@db=bun test.js test5 :: {db: 'Database ready!'}\" \"web@api=bun test.js test6 :: {api: 'API server ready on port 3000!'}\""
+    "test:deps": "bun run src/index.ts -c test.config.json"
   },
   "keywords": ["cli", "process-manager", "parallel", "terminal", "interactive"],
   "author": "",
@@ -26,10 +29,10 @@
     "commander": "^11.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "1.9.4",
     "@types/bun": "^1.1.14",
     "@types/node": "^20.10.5",
     "bun-types": "latest",
-    "prettier": "^3.1.1",
     "typescript": "^5.3.3"
   }
 }

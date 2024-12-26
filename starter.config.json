@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jenslys/sinfonia/main/schema.json",
+  "commands": [
+    {
+      "name": "WEB",
+      "cmd": "npm run dev",
+      "color": "blue"
+    },
+    {
+      "name": "API",
+      "cmd": "npm run server",
+      "group": "BACKEND",
+      "color": "green"
+    }
+  ],
+  "groups": [
+    {
+      "name": "BACKEND",
+      "color": "cyan",
+      "commands": ["API"]
+    }
+  ],
+  "options": {
+    "bufferSize": 100
+  }
+}

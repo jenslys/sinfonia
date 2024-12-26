@@ -1,0 +1,44 @@
+{
+  "$schema": "./schema.json",
+  "commands": [
+    {
+      "name": "DB",
+      "cmd": "bun test.js test4",
+      "color": "blue"
+    },
+    {
+      "name": "API",
+      "cmd": "bun test.js test5",
+      "group": "BACKEND",
+      "dependsOn": ["DB"],
+      "readyPatterns": {
+        "db": "Database ready!"
+      }
+    },
+    {
+      "name": "WEB",
+      "cmd": "bun test.js test6",
+      "group": "FRONTEND",
+      "dependsOn": ["API"],
+      "readyPatterns": {
+        "api": "API server ready on port 3000!"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "BACKEND",
+      "color": "cyan",
+      "commands": ["API"]
+    },
+    {
+      "name": "FRONTEND",
+      "color": "magenta",
+      "commands": ["WEB"]
+    }
+  ],
+  "options": {
+    "bufferSize": 100,
+    "logFile": "test_{timestamp}.log"
+  }
+}

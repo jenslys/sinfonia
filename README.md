@@ -19,8 +19,9 @@ A beautiful process runner for parallel commands with interactive filtering and 
 - 📊 Real-time output monitoring
 - 🔄 Process state management
 - 💾 Configurable output buffer size
-- 🔗 Optional dependency ordering with ready state detection
+- 🔗 Optional dependency ordering with ready state detection (via config file)
 - 📝 Automatic log file generation with customizable paths
+- 📋 JSON Schema for config file validation and IDE support
 
 ## Installation 📦
 
@@ -37,205 +38,134 @@ yarn global add sinfonia
 
 ## Usage 🛠️
 
-Basic usage:
+Sinfonia offers two modes of operation:
+
+### Simple Mode (CLI)
+
+For basic usage without dependencies:
 
 ```bash
-sinfonia "NAME=COMMAND" "NAME2=COMMAND2"
+# Single command
+sinfonia "web=npm run dev"
+
+# Multiple commands
+sinfonia "web=npm run dev" "api=npm run server"
+
+# With groups
+sinfonia "frontend:web=npm run dev" "backend:api=npm run server"
 ```
 
-Using groups:
+Features available in CLI mode:
+
+- Basic command running (`name=cmd`)
+- Basic grouping (`group:name=cmd`)
+- Global color settings (`--color`)
+- Buffer size (`-b, --buffer-size`)
+- Log file (`-l, --log-file`)
+
+### Advanced Mode (Config File)
+
+For complex setups with dependencies, use a config file. You can generate a starter config with:
 
 ```bash
-sinfonia "GROUP:NAME=COMMAND" "GROUP:NAME2=COMMAND2"
+# Generate a starter config file (sinfonia.json)
+sinfonia init
+
+# Generate and overwrite existing config
+sinfonia init --force
 ```
 
-Using dependencies and ready patterns:
+Then run it with:
 
 ```bash
-# Basic dependency (no ready pattern)
-sinfonia "api@db=npm run api"
+# Uses sinfonia.json by default
+sinfonia
 
-# Single dependency with ready pattern
-sinfonia "api@db=npm run api :: {
-  db: 'Database ready'
-}"
-
-# Multiple dependencies
-sinfonia "api@db,cache=npm run api"
-
-# Multiple dependencies with ready patterns
-sinfonia "api@db,cache,auth=npm run api :: {
-  db: 'Database system is ready',
-  cache: 'Ready to accept connections',
-  auth: 'Auth service started'
-}"
-
-# Complex example with groups and multiple dependencies
-sinfonia \
-  "infra:db=docker compose up" \
-  "infra:cache=redis-server" \
-  "infra:auth=npm run auth" \
-  "backend:api@db,cache,auth=npm run api :: {
-    db: 'Database system is ready',
-    cache: 'Ready to accept connections',
-    auth: 'Auth service started'
-  }" \
-  "backend:worker@db,cache=npm run worker :: {
-    db: 'Database system is ready',
-    cache: 'Ready to accept connections'
-  }" \
-  "frontend:web@api=npm run dev :: {
-    api: 'Server started on port 3000'
-  }"
+# Or specify a different config file
+sinfonia -c custom.json
 ```
 
-Real-world examples:
+Additional features in config mode:
 
-```bash
-# Next.js + API + Database
-sinfonia \
-  "db=docker compose up" \
-  "api@db=npm run api :: {
-    db: 'Database system is ready'
-  }" \
-  "web@api=next dev :: {
-    api: 'Server started on port'
-  }"
+- Everything from CLI mode
+- Dependencies between commands (`dependsOn`)
+- Ready patterns for dependencies (`readyPatterns`)
+- Per-command and per-group color customization
+- Reusable configuration
 
-# Microservices with shared dependencies
-sinfonia \
-  "db=docker compose up" \
-  "cache=redis-server" \
-  "auth@db,cache=npm run auth :: {
-    db: 'Database ready',
-    cache: 'Ready to accept'
-  }" \
-  "users@db,cache=npm run users :: {
-    db: 'Database ready',
-    cache: 'Ready to accept'
-  }" \
-  "gateway@auth,users=npm run gateway :: {
-    auth: 'Auth ready on port 4000',
-    users: 'Users ready on port 4001'
-  }"
+Example config file (`sinfonia.json`):
 
-# Full-stack with background workers
-sinfonia \
-  "db=docker compose up" \
-  "cache=redis-server" \
-  "queue=rabbitmq-server" \
-  "api@db,cache,queue=npm run api :: {
-    db: 'PostgreSQL init process complete',
-    cache: 'Ready to accept connections',
-    queue: 'Server startup complete'
-  }" \
-  "worker@db,queue=npm run worker :: {
-    db: 'PostgreSQL init process complete',
-    queue: 'Server startup complete'
-  }" \
-  "web@api=npm run dev :: {
-    api: 'Ready on port 3000'
-  }"
-```
-
-### Command Format
-
-```text
-┌─ Optional group name
-│   ┌─ Process name
-│   │    ┌─ Optional dependencies
-│   │    │       ┌─ The command to run
-│   │    │       │
-GROUP:NAME@DEP1,DEP2=COMMAND :: {
-  DEP1: 'ready pattern for DEP1',
-  DEP2: 'ready pattern for DEP2'
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/cursor-inc/sinfonia/main/schema.json",
+  "commands": [
+    {
+      "name": "DB",
+      "cmd": "docker compose up",
+      "color": "blue"
+    },
+    {
+      "name": "API",
+      "cmd": "npm run api",
+      "group": "BACKEND",
+      "dependsOn": ["DB"],
+      "readyPatterns": {
+        "db": "Database system is ready"
+      }
+    },
+    {
+      "name": "WORKER",
+      "cmd": "npm run worker",
+      "group": "BACKEND",
+      "dependsOn": ["DB"],
+      "readyPatterns": {
+        "db": "Database system is ready"
+      }
+    },
+    {
+      "name": "WEB",
+      "cmd": "npm run dev",
+      "group": "FRONTEND",
+      "dependsOn": ["API"],
+      "readyPatterns": {
+        "api": "Server started on port"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "BACKEND",
+      "color": "cyan",
+      "commands": ["API", "WORKER"]
+    },
+    {
+      "name": "FRONTEND",
+      "color": "magenta",
+      "commands": ["WEB"]
+    }
+  ],
+  "options": {
+    "bufferSize": 100
+  }
 }
-└─ Optional ready patterns
 ```
 
-#### Components
-
-| Component | Description | Example |
-|-----------|-------------|---------|
-| `GROUP:` | Optional group name for organizing processes | `frontend:`, `backend:` |
-| `NAME` | Required process name | `web`, `api`, `db` |
-| `@DEP1,DEP2` | Optional comma-separated dependencies | `@db,cache,auth` |
-| `COMMAND` | The command to run | `npm run dev` |
-| `:: {...}` | Optional ready patterns for dependencies | `:: {db: 'Database ready'}` |
-
-#### Examples
-
-```bash
-# Basic process
-"web=npm run dev"
-
-# With group
-"frontend:web=npm run dev"
-
-# With dependency
-"api@db=npm run api"
-
-# With ready pattern
-"api@db=npm run api :: {
-  db: 'Database ready'
-}"
-
-# Full example
-"backend:api@db,cache=npm run api :: {
-  db: 'Database ready',
-  cache: 'Cache ready'
-}"
-```
-
-### Dependencies and Ready Patterns
-
-Dependencies can be specified in two ways:
-
-1. Simple dependency (wait for process to start):
-
-```bash
-"api@db=npm run api"
-```
-
-1. Pattern dependency (wait for specific output):
-
-```bash
-"api@db=npm run api :: {
-  db: 'Database ready'
-}"
-```
-
-#### Behavior
-
-- **Without ready pattern**: Process starts as soon as its dependency is running
-
-  ```bash
-  "web@api=npm run web"  # Web starts as soon as API process is running
-  ```
-
-- **With ready pattern**: Process waits for both:
-  1. Dependency process to be running
-  2. Dependency output to match the specified pattern
-
-  ```bash
-  "web@api=npm run web :: {
-    api: 'API server ready on port 3000'
-  }"  # Web starts only after API outputs the ready message
-  ```
-
-This allows for flexible dependency management - use simple dependencies when you just need a process to be running, or add ready patterns when you need to wait for specific initialization steps.
+The config file supports JSON Schema validation for better IDE support and validation.
 
 ### Options
 
 ```bash
-# Custom colors
-sinfonia -c "red,blue,green" "web=npm run dev" "api=npm run server"
+# Custom colors (CLI only)
+sinfonia --color "red,blue,green" "web=npm run dev" "api=npm run server"
 
-# Custom buffer size (default: 100 lines per process)
+# Custom buffer size
 sinfonia -b 200 "web=npm run dev" "api=npm run server"
 
-# Save logs to file (default: sinfonia_{timestamp}.log)
+# Enable logging to file
 sinfonia -l "output_{timestamp}.log" "web=npm run dev" "api=npm run server"
+
+# Use custom config file
+sinfonia -c custom.json
 ```
 
 ## Controls 🎮
@@ -251,26 +181,6 @@ sinfonia -l "output_{timestamp}.log" "web=npm run dev" "api=npm run server"
 ## Preview
 
 ![preview-screenshot](https://media.cleanshot.cloud/media/19237/ssEkSOOhpPhptEMQmvuJYH8JuprioiRt5Gk30POR.jpeg?Expires=1735168137&Signature=KqCIliVJBpjOuU3AEWXgb8TOpcG-sexSnDup2q5bAGIPh1oViF5AvLVbBZIWj7GVRhS~jHDejavruyXBqRZ0BUdXxuaR6q1CsduiSmyf0T3toyJIp1605sAo8EzM8V7CphA~xKMbnUMDPQFyRmGzb5Na6F3iGUjPQ2u8ntkHjZ05BPfhvWeQoxAcjMqFzd-RxZfSt3ny~fzt~1kiTcz02hCZQxDQStOqhR7rGzepVSbiLpHurpfjrpi94Q52chxVsUT~oajBE4RZ1hWCJGpICEKT~uy7m4rGDXh9fgy3Ux0MV5UGUG6AUSZld77uP5vu0c0pZ0mbOETfdeVIf6O8dQ__&Key-Pair-Id=K269JMAT9ZF4GZ)
-
-## Comparison with Other Tools 🔍
-
-Sinfonia brings features that aren't available in other process managers:
-
-### Feature Comparison
-
-| Feature                          | Sinfonia | Concurrently | npm-run-all | Foreman |
-|---------------------------------|----------|--------------|-------------|----------|
-| Parallel Execution              | ✅       | ✅           | ✅          | ✅       |
-| Process Grouping                | ✅       | ❌           | ❌          | ✅       |
-| Interactive Output Filtering     | ✅       | ❌           | ❌          | ❌       |
-| Color-coded Output              | ✅       | ✅           | ✅          | ✅       |
-| Interactive Process Control      | ✅       | ❌           | ❌          | ❌       |
-| Real-time Output Monitoring     | ✅       | ✅           | ✅          | ✅       |
-| Process State Management        | ✅       | ❌           | ❌          | ✅       |
-| Configurable Output Buffer      | ✅       | ❌           | ❌          | ❌       |
-| Dependency Ordering             | ✅       | ❌           | ❌          | ❌       |
-| Ready State Detection           | ✅       | ❌           | ❌          | ❌       |
-| Setup Complexity                | Simple   | Simple       | Simple      | Medium   |
 
 ## License 📄
 

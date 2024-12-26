@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sinfonia Configuration",
+  "description": "Configuration file for Sinfonia process runner",
+  "type": "object",
+  "required": ["commands"],
+  "properties": {
+    "commands": {
+      "type": "array",
+      "description": "List of commands to run",
+      "items": {
+        "type": "object",
+        "required": ["name", "cmd"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the command"
+          },
+          "cmd": {
+            "type": "string",
+            "description": "Command to execute"
+          },
+          "color": {
+            "type": "string",
+            "description": "Color for the command output",
+            "enum": ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+          },
+          "group": {
+            "type": "string",
+            "description": "Group this command belongs to"
+          },
+          "dependsOn": {
+            "type": "array",
+            "description": "List of commands this command depends on",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readyPatterns": {
+            "type": "object",
+            "description": "Patterns to match in dependency outputs to determine when they are ready",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "description": "List of command groups",
+      "items": {
+        "type": "object",
+        "required": ["name", "commands"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the group"
+          },
+          "color": {
+            "type": "string",
+            "description": "Color for the group",
+            "enum": ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+          },
+          "commands": {
+            "type": "array",
+            "description": "List of command names in this group",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "description": "Global options",
+      "properties": {
+        "bufferSize": {
+          "type": "integer",
+          "description": "Number of log lines to keep in memory per process",
+          "minimum": 1,
+          "default": 100
+        },
+        "logFile": {
+          "type": "string",
+          "description": "Log file path (use {timestamp} for current date/time). If not set, logging is disabled.",
+          "pattern": ".*\\{timestamp\\}.*"
+        }
+      }
+    }
+  }
+}

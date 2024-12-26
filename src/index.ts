@@ -1,10 +1,17 @@
 #!/usr/bin/env bun
-import { spawn } from "child_process";
-import readline from "readline";
-import { Command, Processes, Group, ReadyPatterns } from "./types/index.js";
+import { type ChildProcess, spawn } from "node:child_process";
+import { appendFile, existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import readline from "node:readline";
 import { program } from "commander";
-import { appendFile } from "fs";
-import path from "path";
+import type {
+  Command,
+  Config,
+  ConfigFile,
+  Group,
+  Processes,
+  ReadyPatterns,
+} from "./types/index.js";
 
 // Format: YYYY-MM-DD_HH-mm-ss
 function formatTimestamp(date: Date = new Date()): string {
@@ -64,9 +71,7 @@ export class ProcessManager {
     this.maxLogsPerProcess = maxLogsPerProcess;
     this.logFile = logFile;
     if (logFile && !this.logFile) {
-      console.warn(
-        "Invalid log file path provided. File logging will be disabled."
-      );
+      console.warn("Invalid log file path provided. File logging will be disabled.");
     }
     commands.forEach(({ name }) => {
       this.logBuffers[name] = [];
@@ -76,9 +81,7 @@ export class ProcessManager {
     // Set up log flushing interval if logging is enabled
     if (this.logFile) {
       this.logFlushInterval = setInterval(() => {
-        this.logPromiseQueue = this.logPromiseQueue.then(() =>
-          this.flushLogs()
-        );
+        this.logPromiseQueue = this.logPromiseQueue.then(() => this.flushLogs());
       }, 1000);
     }
   }
@@ -93,8 +96,7 @@ export class ProcessManager {
   }
 
   private async flushLogs(): Promise<void> {
-    if (this.isWritingLogs || this.logQueue.length === 0 || !this.logFile)
-      return;
+    if (this.isWritingLogs || this.logQueue.length === 0 || !this.logFile) return;
     this.isWritingLogs = true;
 
     const logsToWrite = this.logQueue.join("");
@@ -102,15 +104,14 @@ export class ProcessManager {
 
     try {
       await new Promise<void>((resolve, reject) => {
+        // biome-ignore lint/style/noNonNullAssertion: logFile is checked in parent scope
         appendFile(this.logFile!, logsToWrite, (err) => {
           if (err) reject(err);
           else resolve();
         });
       });
     } catch (e) {
-      console.error(
-        `Failed to write to log file: ${e}. File logging will be disabled.`
-      );
+      console.error(`Failed to write to log file: ${e}. File logging will be disabled.`);
       this.logFile = null;
       if (this.logFlushInterval) {
         clearInterval(this.logFlushInterval);
@@ -143,7 +144,7 @@ export class ProcessManager {
       Object.values(this.processes).forEach((proc) => {
         try {
           proc.kill("SIGTERM");
-        } catch (e) {
+        } catch (_e) {
           // Ignore errors during cleanup
         }
       });
@@ -170,9 +171,7 @@ export class ProcessManager {
       // Print logs in clean format
       console.log(); // Add a blank line for readability
       allLogs.forEach((log) => {
-        const cleanData = log.data
-          .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "")
-          .trimEnd();
+        const cleanData = log.data.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trimEnd();
         console.log(`[${log.name}] ${cleanData}`);
       });
       console.log(); // Add a blank line at the end
@@ -186,8 +185,8 @@ export class ProcessManager {
           });
         return;
       }
-    } catch (e) {
-      console.error("Error during cleanup:", e);
+    } catch (_e) {
+      console.error("Error during cleanup:", _e);
     } finally {
       process.exit(0);
     }
@@ -213,20 +212,16 @@ export class ProcessManager {
         const cleanData = data.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trimEnd();
         const logEntry = `[${new Date(timestamp).toISOString()}] [${name}] ${cleanData}\n`;
         this.queueLog(logEntry).catch((e) => {
-          console.error(
-            `Failed to queue log: ${e}. File logging will be disabled.`
-          );
+          console.error(`Failed to queue log: ${e}. File logging will be disabled.`);
           this.logFile = null;
           if (this.logFlushInterval) {
             clearInterval(this.logFlushInterval);
             this.logFlushInterval = null;
           }
         });
-      } catch (e) {
+      } catch (_e) {
         // Disable logging on first error to prevent spam
-        console.error(
-          `Failed to write to log file: ${e}. File logging will be disabled.`
-        );
+        console.error(`Failed to write to log file: ${_e}. File logging will be disabled.`);
         this.logFile = null;
         if (this.logFlushInterval) {
           clearInterval(this.logFlushInterval);
@@ -241,9 +236,7 @@ export class ProcessManager {
         this.currentFilter === name ||
         (this.currentFilter.startsWith("group:") &&
           this.groups.find(
-            (g) =>
-              `group:${g.name}` === this.currentFilter &&
-              g.commands.includes(name)
+            (g) => `group:${g.name}` === this.currentFilter && g.commands.includes(name)
           )))
     ) {
       this.updateScreen();
@@ -331,16 +324,13 @@ export class ProcessManager {
       return;
     }
 
-    const maxWidth = Math.max(
-      10,
-      (process.stdout.columns || 80) - PANEL_WIDTH - 2
-    );
+    const maxWidth = Math.max(10, (process.stdout.columns || 80) - PANEL_WIDTH - 2);
     const lines = data.toString().split("\n");
 
     lines.forEach((line) => {
       if (line.length > 0) {
         // Strip ANSI escape codes for length calculation
-        const strippedLine = line.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+        const _strippedLine = line.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
 
         // Find position in original line that corresponds to maxWidth visible chars
         let visibleChars = 0;
@@ -371,9 +361,7 @@ export class ProcessManager {
         }
 
         const truncatedLine = line.slice(0, pos);
-        process.stdout.write(
-          `\x1B[${this.currentLogLine};${PANEL_WIDTH + 2}H${truncatedLine}`
-        );
+        process.stdout.write(`\x1B[${this.currentLogLine};${PANEL_WIDTH + 2}H${truncatedLine}`);
         this.currentLogLine++;
       }
     });
@@ -411,9 +399,7 @@ export class ProcessManager {
 
     const isAllSelected = this.currentFilter === null;
     process.stdout.write(
-      `\x1B[11;2H${isAllSelected ? "▶ " : "  "}\x1b[37m${
-        isAllSelected ? "\x1b[7m" : ""
-      }ALL\x1b[0m`
+      `\x1B[11;2H${isAllSelected ? "▶ " : "  "}\x1b[37m${isAllSelected ? "\x1b[7m" : ""}ALL\x1b[0m`
     );
 
     let currentLine = 12;
@@ -423,12 +409,8 @@ export class ProcessManager {
       const isSelected = this.currentFilter === `group:${group.name}`;
       const prefix = isSelected ? "▶ " : "  ";
       const format = isSelected ? `${group.color}\x1b[7m` : group.color;
-      const allRunning = group.commands.every(
-        (cmd) => this.processStates[cmd] === "running"
-      );
-      const allStopped = group.commands.every(
-        (cmd) => this.processStates[cmd] === "stopped"
-      );
+      const allRunning = group.commands.every((cmd) => this.processStates[cmd] === "running");
+      const allStopped = group.commands.every((cmd) => this.processStates[cmd] === "stopped");
       const stateIcon = allRunning ? "⚡" : allStopped ? "⏸" : "⚡⏸";
 
       process.stdout.write(
@@ -463,9 +445,7 @@ export class ProcessManager {
       const state = this.processStates[name];
       const stateIcon = state === "running" ? "⚡" : "⏸";
 
-      process.stdout.write(
-        `\x1B[${currentLine};2H${prefix}${format}${stateIcon} ${name}\x1b[0m`
-      );
+      process.stdout.write(`\x1B[${currentLine};2H${prefix}${format}${stateIcon} ${name}\x1b[0m`);
       currentLine++;
     });
 
@@ -475,18 +455,12 @@ export class ProcessManager {
       const searchY = process.stdout.rows - 4; // Move up to make room for border
 
       // Draw search box border and instructions
-      process.stdout.write(
-        `\x1B[${searchY};2H┌${"─".repeat(PANEL_WIDTH - 4)}┐`
-      );
+      process.stdout.write(`\x1B[${searchY};2H┌${"─".repeat(PANEL_WIDTH - 4)}┐`);
       process.stdout.write(
         `\x1B[${searchY + 1};2H│ ${searchPrompt}${this.searchBuffer}${" ".repeat(PANEL_WIDTH - 4 - searchPrompt.length - this.searchBuffer.length - 2)} │`
       );
-      process.stdout.write(
-        `\x1B[${searchY + 2};2H└${"─".repeat(PANEL_WIDTH - 4)}┘`
-      );
-      process.stdout.write(
-        `\x1B[${searchY + 3};2H\x1b[90m[Enter] Submit · [Esc] Cancel\x1b[0m`
-      );
+      process.stdout.write(`\x1B[${searchY + 2};2H└${"─".repeat(PANEL_WIDTH - 4)}┘`);
+      process.stdout.write(`\x1B[${searchY + 3};2H\x1b[90m[Enter] Submit · [Esc] Cancel\x1b[0m`);
 
       // Position cursor inside search box
       process.stdout.write(
@@ -497,9 +471,7 @@ export class ProcessManager {
     // If there's an active search, show it above the search box
     if (this.searchText) {
       const filterY = process.stdout.rows - 5; // Move up above search box
-      process.stdout.write(
-        `\x1B[${filterY};2H\x1b[33mFilter: ${this.searchText}\x1b[0m`
-      );
+      process.stdout.write(`\x1B[${filterY};2H\x1b[33mFilter: ${this.searchText}\x1b[0m`);
     }
   }
 
@@ -508,7 +480,7 @@ export class ProcessManager {
     this.currentLogLine = 1;
   }
 
-  private writeLog(data: string, store = true): void {
+  private writeLog(data: string, _store = true): void {
     try {
       if (this.currentLogLine >= (process.stdout.rows || 24) - 1) {
         this.currentLogLine = 1;
@@ -516,10 +488,7 @@ export class ProcessManager {
         return;
       }
 
-      const maxWidth = Math.max(
-        10,
-        (process.stdout.columns || 80) - PANEL_WIDTH - 2
-      );
+      const maxWidth = Math.max(10, (process.stdout.columns || 80) - PANEL_WIDTH - 2);
       const lines = data.toString().split("\n");
 
       lines.forEach((line) => {
@@ -527,19 +496,17 @@ export class ProcessManager {
           const truncatedLine = line.slice(0, maxWidth);
           try {
             process.stdout.write(`\x1B[s`);
-            process.stdout.write(
-              `\x1B[${this.currentLogLine};${PANEL_WIDTH + 2}H${truncatedLine}`
-            );
+            process.stdout.write(`\x1B[${this.currentLogLine};${PANEL_WIDTH + 2}H${truncatedLine}`);
             process.stdout.write(`\x1B[u`);
             this.currentLogLine++;
-          } catch (e) {
+          } catch (_e) {
             // Ignore write errors
           }
         }
       });
 
       this.updateScreen();
-    } catch (e) {
+    } catch (_e) {
       if (!this.isCleaningUp) {
         this.cleanup();
       }
@@ -569,11 +536,7 @@ export class ProcessManager {
 
       if (unreadyDeps.length > 0) {
         this.pendingProcesses.add(name);
-        this.addLog(
-          name,
-          `Waiting for dependencies: ${unreadyDeps.join(", ")}`,
-          command.color
-        );
+        this.addLog(name, `Waiting for dependencies: ${unreadyDeps.join(", ")}`, command.color);
         return;
       }
     }
@@ -597,15 +560,12 @@ export class ProcessManager {
   }
 
   /**
-   * Sets up stdout, stderr and exit handlers for a process.
-   * Manages ready patterns and dependency tracking.
-   * @param name - Name of the process
-   * @param proc - The spawned child process
+   * Set up process output handlers
+   * @param name - Process name
+   * @param proc - Child process instance
    * @param color - ANSI color code for process output
    */
-  private setupProcessHandlers(name: string, proc: any, color: string): void {
-    const command = this.commands.find((cmd) => cmd.name === name);
-
+  private setupProcessHandlers(name: string, proc: ChildProcess, color: string): void {
     proc.stdout?.on("data", (data: Buffer) => {
       const logData = data.toString();
       this.addLog(name, logData, color);
@@ -615,12 +575,9 @@ export class ProcessManager {
           waitingCmd.dependsOn?.includes(name) &&
           waitingCmd.readyPatterns?.[name.toLowerCase()]
         ) {
-          const pattern = new RegExp(
-            waitingCmd.readyPatterns[name.toLowerCase()]
-          );
+          const pattern = new RegExp(waitingCmd.readyPatterns[name.toLowerCase()]);
           if (pattern.test(logData)) {
-            this.dependencyReady[waitingCmd.name] =
-              this.dependencyReady[waitingCmd.name] || {};
+            this.dependencyReady[waitingCmd.name] = this.dependencyReady[waitingCmd.name] || {};
             this.dependencyReady[waitingCmd.name][name.toLowerCase()] = true;
             this.startPendingProcesses();
           }
@@ -689,18 +646,10 @@ export class ProcessManager {
     if (this.processStates[name] === "running") {
       this.processes[name].kill();
       this.processStates[name] = "stopped";
-      this.addLog(
-        name,
-        "Process stopped",
-        this.commands.find((c) => c.name === name)?.color || ""
-      );
+      this.addLog(name, "Process stopped", this.commands.find((c) => c.name === name)?.color || "");
     } else {
       await this.startProcess(name);
-      this.addLog(
-        name,
-        "Process started",
-        this.commands.find((c) => c.name === name)?.color || ""
-      );
+      this.addLog(name, "Process started", this.commands.find((c) => c.name === name)?.color || "");
     }
     this.updateScreen();
   }
@@ -710,11 +659,7 @@ export class ProcessManager {
 
     this.processes[name].kill();
     await this.startProcess(name);
-    this.addLog(
-      name,
-      "Process restarted",
-      this.commands.find((c) => c.name === name)?.color || ""
-    );
+    this.addLog(name, "Process restarted", this.commands.find((c) => c.name === name)?.color || "");
     this.updateScreen();
   }
 
@@ -722,9 +667,7 @@ export class ProcessManager {
     const group = this.groups.find((g) => g.name === groupName);
     if (!group) return;
 
-    const allRunning = group.commands.every(
-      (cmd) => this.processStates[cmd] === "running"
-    );
+    const allRunning = group.commands.every((cmd) => this.processStates[cmd] === "running");
 
     for (const cmdName of group.commands) {
       if (allRunning) {
@@ -775,7 +718,7 @@ export class ProcessManager {
           process.stdin.setRawMode(true);
           process.stdin.resume();
         }
-      } catch (e) {
+      } catch (_e) {
         console.error("Failed to set raw mode");
         process.exit(1);
       }
@@ -858,24 +801,17 @@ export class ProcessManager {
         // Create a flat list of items in display order
         const allItems = [
           null, // ALL
-          ...this.groups.flatMap((g) => [
-            `group:${g.name}`,
-            ...g.commands.map((cmd) => cmd),
-          ]),
+          ...this.groups.flatMap((g) => [`group:${g.name}`, ...g.commands.map((cmd) => cmd)]),
           ...this.commands.filter((cmd) => !cmd.group).map((cmd) => cmd.name),
         ];
 
         const currentIndex = allItems.indexOf(this.currentFilter);
         if (key.name === "up") {
           this.currentFilter =
-            currentIndex > 0
-              ? allItems[currentIndex - 1]
-              : allItems[allItems.length - 1];
+            currentIndex > 0 ? allItems[currentIndex - 1] : allItems[allItems.length - 1];
         } else {
           this.currentFilter =
-            currentIndex < allItems.length - 1
-              ? allItems[currentIndex + 1]
-              : allItems[0];
+            currentIndex < allItems.length - 1 ? allItems[currentIndex + 1] : allItems[0];
         }
         this.updateScreen();
       }
@@ -947,124 +883,188 @@ export class ProcessManager {
   }
 }
 
-/**
- * Parses ready patterns from a string format into a ReadyPatterns object.
- * Format: {dep1: 'pattern1', dep2: 'pattern2'}
- * @param patternsStr - String containing ready patterns
- * @returns Parsed ReadyPatterns object or undefined if parsing fails
- */
-function parseReadyPatterns(patternsStr: string): ReadyPatterns | undefined {
-  try {
-    // Remove leading/trailing whitespace and braces
-    const cleaned = patternsStr.trim().replace(/^\{|\}$/g, "");
-    // Split by commas not inside quotes
-    const pairs = cleaned.split(/,(?=(?:[^']*'[^']*')*[^']*$)/);
-
-    const patterns: ReadyPatterns = {};
-    pairs.forEach((pair) => {
-      const [key, value] = pair.split(":").map((s) => s.trim());
-      // Remove quotes and whitespace
-      patterns[key] = value.replace(/^'|'$/g, "");
-    });
-    return patterns;
-  } catch (e) {
-    return undefined;
-  }
-}
-
 // Run CLI directly
 program
   .name("sinfonia")
   .description("Run multiple commands in parallel with interactive filtering")
-  .version("1.0.0")
-  .argument(
-    "<commands...>",
-    "Commands to run (format: [GROUP:]NAME[@DEP1,DEP2]=COMMAND[:: {DEP1: 'pattern', DEP2: 'pattern'}])"
-  )
+  .version("1.0.0");
+
+program
+  .command("init")
+  .description("Generate a starter config file")
+  .option("-f, --force", "Overwrite existing config file")
+  .action((options) => {
+    const configPath = path.resolve(process.cwd(), "sinfonia.json");
+    if (existsSync(configPath) && !options.force) {
+      console.error("Config file already exists. Use --force to overwrite.");
+      process.exit(1);
+    }
+
+    const starterConfig = {
+      $schema: "https://raw.githubusercontent.com/cursor-inc/sinfonia/main/schema.json",
+      commands: [
+        {
+          name: "WEB",
+          cmd: "npm run dev",
+          color: "blue",
+        },
+        {
+          name: "API",
+          cmd: "npm run server",
+          group: "BACKEND",
+          color: "green",
+        },
+      ],
+      groups: [
+        {
+          name: "BACKEND",
+          color: "cyan",
+          commands: ["API"],
+        },
+      ],
+      options: {
+        bufferSize: 100,
+        logFile: "sinfonia_{timestamp}.log",
+      },
+    };
+
+    try {
+      writeFileSync(configPath, JSON.stringify(starterConfig, null, 2));
+      console.log(`Created config file at ${configPath}`);
+    } catch (error) {
+      console.error(`Failed to create config file: ${error}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("start", { isDefault: true })
+  .description("Start processes")
+  .option("-c, --config <file>", "Path to config file", "sinfonia.json")
+  .option("-l, --log-file [file]", "Enable logging to file (use {timestamp} for current date/time)")
+  .option("-b, --buffer-size <size>", "Number of log lines to keep in memory per process", "100")
   .option(
-    "-c, --color <colors>",
+    "--color <colors>",
     "Colors for each command (comma-separated)",
     "blue,green,yellow,magenta,cyan"
   )
-  .option(
-    "-b, --buffer-size <size>",
-    "Number of log lines to keep in memory per process",
-    "100"
-  )
-  .option(
-    "-l, --log-file <file>",
-    "Save logs to file (use {timestamp} for current date/time)",
-    "sinfonia_{timestamp}.log"
-  )
+  .argument("[commands...]", "Simple commands to run (format: [GROUP:]NAME=COMMAND)")
   .action((commands: string[], options) => {
-    const colors = options.color
-      .split(",")
-      .map((c: string) => `\x1b[${getColorCode(c)}m`);
+    let config: Config;
 
-    const groups: Group[] = [];
-    const parsedCommands: Command[] = [];
-    let colorIndex = 0;
+    if (options.config && existsSync(options.config)) {
+      try {
+        const configPath = path.resolve(process.cwd(), options.config);
+        const configContent = readFileSync(configPath, "utf-8");
+        const parsedConfig: ConfigFile = JSON.parse(configContent);
 
-    // Format the log file path if provided
-    const logFile = options.logFile ? formatLogPath(options.logFile) : null;
+        // Ensure all commands have colors
+        const colors = (parsedConfig.options?.colors || options.color.split(",")).map(
+          (c: string) => `\x1b[${getColorCode(c)}m`
+        );
+        let colorIndex = 0;
 
-    commands.forEach((cmd) => {
-      // Split into parts: nameWithGroup=command :: patterns
-      const [nameAndCmd, patternsStr] = cmd.split(" :: ");
-      const [nameWithGroup, command] = nameAndCmd.split("=");
+        const commandsWithColors: Command[] = parsedConfig.commands.map((cmd) => ({
+          ...cmd,
+          color: cmd.color
+            ? `\x1b[${getColorCode(cmd.color)}m`
+            : colors[colorIndex++ % colors.length],
+        }));
 
-      // Parse dependencies
-      const [fullName, depsStr] = nameWithGroup.split("@");
-      const deps = depsStr?.split(",").filter(Boolean);
+        const groupsWithColors: Group[] =
+          parsedConfig.groups?.map((group) => ({
+            ...group,
+            color: group.color
+              ? `\x1b[${getColorCode(group.color)}m`
+              : colors[colorIndex++ % colors.length],
+          })) || [];
 
-      // Parse group and name
-      const [groupName, name] = fullName.includes(":")
-        ? fullName.split(":")
-        : [undefined, fullName];
-
-      // Parse ready patterns if they exist
-      const readyPatterns = patternsStr
-        ? parseReadyPatterns(patternsStr)
-        : undefined;
-
-      if (groupName) {
-        let group = groups.find((g) => g.name === groupName.toUpperCase());
-        if (!group) {
-          group = {
-            name: groupName.toUpperCase(),
-            color: colors[colorIndex++ % colors.length],
-            commands: [],
-          };
-          groups.push(group);
-        }
-        group.commands.push(name.toUpperCase());
+        config = {
+          commands: commandsWithColors,
+          groups: groupsWithColors,
+          options: parsedConfig.options,
+        };
+      } catch (_e) {
+        console.error(`Failed to read config file: ${_e}`);
+        process.exit(1);
       }
+    } else if (commands.length === 0) {
+      console.error("No commands specified and no config file found.");
+      console.log("Run 'sinfonia init' to create a starter config file.");
+      process.exit(1);
+    } else {
+      // Parse simple commands
+      const colors = options.color.split(",").map((c: string) => `\x1b[${getColorCode(c)}m`);
+      const groups: Group[] = [];
+      const parsedCommands: Command[] = [];
+      let colorIndex = 0;
 
-      parsedCommands.push({
-        name: name.toUpperCase(),
-        cmd: command,
-        color: colors[colorIndex++ % colors.length],
-        group: groupName?.toUpperCase(),
-        dependsOn: deps?.map((d) => d.toUpperCase()),
-        readyPatterns,
+      commands.forEach((cmd) => {
+        const [nameWithGroup, command] = cmd.split("=");
+        const [groupName, name] = nameWithGroup.includes(":")
+          ? nameWithGroup.split(":")
+          : [undefined, nameWithGroup];
+
+        if (groupName) {
+          let group = groups.find((g) => g.name === groupName.toUpperCase());
+          if (!group) {
+            const color = colors[colorIndex++ % colors.length] || colors[0];
+            group = {
+              name: groupName.toUpperCase(),
+              color,
+              commands: [],
+            };
+            groups.push(group);
+          }
+          group.commands.push(name.toUpperCase());
+        }
+
+        parsedCommands.push({
+          name: name.toUpperCase(),
+          cmd: command,
+          color: colors[colorIndex++ % colors.length] || colors[0],
+          group: groupName?.toUpperCase(),
+        });
       });
-    });
 
-    const bufferSize = parseInt(options.bufferSize, 10);
-    if (isNaN(bufferSize) || bufferSize < 1) {
+      config = {
+        commands: parsedCommands,
+        groups,
+        options: {
+          colors: options.color.split(","),
+          bufferSize: Number.parseInt(options.bufferSize, 10),
+          logFile: options.logFile,
+        },
+      };
+    }
+
+    // Validate config
+    if (!config.commands?.length) {
+      console.error(
+        "No commands specified. Use either a config file or provide commands directly."
+      );
+      process.exit(1);
+    }
+
+    const bufferSize = config.options?.bufferSize || Number.parseInt(options.bufferSize, 10);
+    if (Number.isNaN(bufferSize) || bufferSize < 1) {
       console.error("Buffer size must be a positive number");
       process.exit(1);
     }
 
+    // Format log file path if logging is enabled
+    const logFile = options.logFile
+      ? formatLogPath(options.logFile)
+      : config.options?.logFile
+        ? formatLogPath(config.options.logFile)
+        : null;
+
     console.log("Starting processes...");
-    const manager = new ProcessManager(
-      parsedCommands,
-      groups,
-      bufferSize,
-      logFile
-    );
+    const manager = new ProcessManager(config.commands, config.groups || [], bufferSize, logFile);
     manager.start();
   });
+
+program.parse();
 
 /**
  * Maps color names to ANSI color codes.
@@ -1084,5 +1084,3 @@ function getColorCode(color: string): string {
   };
   return codes[color.toLowerCase()] || "37";
 }
-
-program.parse();
