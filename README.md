@@ -97,7 +97,7 @@ Example config file (`sinfonia.json`):
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/cursor-inc/sinfonia/main/schema.json",
+  "$schema": "https://raw.githubusercontent.com/jenslys/sinfonia/main/schema.json",
   "commands": [
     {
       "name": "DB",

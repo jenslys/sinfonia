@@ -900,36 +900,10 @@ program
       process.exit(1);
     }
 
-    const starterConfig = {
-      $schema: "https://raw.githubusercontent.com/cursor-inc/sinfonia/main/schema.json",
-      commands: [
-        {
-          name: "WEB",
-          cmd: "npm run dev",
-          color: "blue",
-        },
-        {
-          name: "API",
-          cmd: "npm run server",
-          group: "BACKEND",
-          color: "green",
-        },
-      ],
-      groups: [
-        {
-          name: "BACKEND",
-          color: "cyan",
-          commands: ["API"],
-        },
-      ],
-      options: {
-        bufferSize: 100,
-        logFile: "sinfonia_{timestamp}.log",
-      },
-    };
-
     try {
-      writeFileSync(configPath, JSON.stringify(starterConfig, null, 2));
+      const starterConfigPath = path.join(__dirname, "../starter.config.json");
+      const starterConfig = readFileSync(starterConfigPath, "utf-8");
+      writeFileSync(configPath, starterConfig);
       console.log(`Created config file at ${configPath}`);
     } catch (error) {
       console.error(`Failed to create config file: ${error}`);
