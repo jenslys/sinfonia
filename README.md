@@ -187,15 +187,43 @@ GROUP:NAME@DEP1,DEP2=COMMAND :: {
 }"
 ```
 
-### Dependencies
+### Dependencies and Ready Patterns
 
-- Use `@` to specify dependencies (e.g., `api@db` means api depends on db)
-- Multiple dependencies are comma-separated (e.g., `api@db,cache`)
-- Ready patterns are specified after `::` in a JSON-like format
-- Each dependency can have its own ready pattern
-- A process will only start after all its dependencies are "ready"
-- A process is considered "ready" when its output matches its ready pattern
-- If no ready pattern is specified for a dependency, it's ready immediately after starting
+Dependencies can be specified in two ways:
+
+1. Simple dependency (wait for process to start):
+
+```bash
+"api@db=npm run api"
+```
+
+1. Pattern dependency (wait for specific output):
+
+```bash
+"api@db=npm run api :: {
+  db: 'Database ready'
+}"
+```
+
+#### Behavior
+
+- **Without ready pattern**: Process starts as soon as its dependency is running
+
+  ```bash
+  "web@api=npm run web"  # Web starts as soon as API process is running
+  ```
+
+- **With ready pattern**: Process waits for both:
+  1. Dependency process to be running
+  2. Dependency output to match the specified pattern
+
+  ```bash
+  "web@api=npm run web :: {
+    api: 'API server ready on port 3000'
+  }"  # Web starts only after API outputs the ready message
+  ```
+
+This allows for flexible dependency management - use simple dependencies when you just need a process to be running, or add ready patterns when you need to wait for specific initialization steps.
 
 ### Options
 
