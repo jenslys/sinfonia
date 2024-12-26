@@ -4,14 +4,7 @@ import { appendFile, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { program } from "commander";
-import type {
-  Command,
-  Config,
-  ConfigFile,
-  Group,
-  Processes,
-  ReadyPatterns,
-} from "./types/index.js";
+import type { Command, Config, ConfigFile, Group, Processes } from "./types/index.js";
 
 // Format: YYYY-MM-DD_HH-mm-ss
 function formatTimestamp(date: Date = new Date()): string {
