@@ -1,0 +1,29 @@
+{
+  "$schema": "../schema.json",
+  "commands": [
+    {
+      "name": "BASE",
+      "cmd": "echo 'Base service ready'",
+      "color": "blue"
+    },
+    {
+      "name": "DEPENDENT",
+      "cmd": "echo 'Dependent service starting...'",
+      "color": "green",
+      "dependsOn": ["BASE"],
+      "readyPatterns": {
+        "BASE": "ready"
+      }
+    },
+    {
+      "name": "NESTED",
+      "cmd": "echo 'Nested service starting...'",
+      "color": "magenta",
+      "dependsOn": ["DEPENDENT"],
+      "group": "TEST"
+    }
+  ],
+  "options": {
+    "bufferSize": 100
+  }
+}

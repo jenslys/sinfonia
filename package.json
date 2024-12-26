@@ -1,27 +1,25 @@
 {
   "name": "sinfonia",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "A beautiful process runner for parallel commands with interactive filtering",
   "module": "dist/index.js",
   "type": "module",
   "bin": {
-    "sinfonia": "./dist/index.js"
+    "sinfonia": "./dist/cli.js"
   },
   "files": ["dist", "schema.json", "starter.config.json", "README.md", "LICENSE"],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node",
-    "start": "bun run dist/index.js",
-    "dev": "bun run --watch src/index.ts",
+    "build": "bun build ./src/cli.ts --outdir ./dist --target node",
+    "start": "bun run dist/cli.js",
+    "dev": "bun run --watch src/cli.ts",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "check": "biome check --write .",
-    "test:counter": "bun test.js test1",
-    "test:random": "bun test.js test2",
-    "test:time": "bun test.js test3",
-    "test:all": "bun run src/index.ts -l \"output_{timestamp}.log\" \"counter=bun test.js test1\" \"random=bun test.js test2\" \"time=bun test.js test3\"",
-    "test:groups": "bun run src/index.ts \"timers:counter=bun test.js test1\" \"timers:time=bun test.js test3\" \"random:gen1=bun test.js test2\" \"random:gen2=bun test.js test2\"",
-    "test:deps": "bun run src/index.ts -c test.config.json",
-    "test:init": "bun run src/index.ts init"
+    "test": "bun test tests/*.test.ts",
+    "test:watch": "bun test --watch tests/*.test.ts",
+    "test:coverage": "bun test --coverage tests/*.test.ts",
+    "test:init": "bun run src/cli.ts init",
+    "test:manual": "bun run src/cli.ts \"counter=bun test.js test1\" \"random=bun test.js test2\" \"time=bun test.js test3\""
   },
   "keywords": ["cli", "process-manager", "parallel", "terminal", "interactive"],
   "author": "",
