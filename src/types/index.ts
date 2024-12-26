@@ -1,6 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 
-export interface ReadyPatterns {
+interface ReadyPatterns {
   [key: string]: string;
 }
 
