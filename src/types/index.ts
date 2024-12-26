@@ -27,6 +27,7 @@ export interface Config {
   commands: Command[];
   groups?: Group[];
   options?: {
+    colors?: string[];
     bufferSize?: number;
     logFile?: string;
   };
