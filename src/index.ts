@@ -555,15 +555,16 @@ export class ProcessManager {
     const command = this.commands.find((cmd) => cmd.name === name);
     if (!command) return;
 
-    // Check dependencies
     if (command.dependsOn?.length) {
       const unreadyDeps = command.dependsOn.filter((dep) => {
-        // If dependency has a ready pattern, check if it's ready
-        if (command.readyPatterns?.[dep]) {
-          return !this.dependencyReady[name]?.[dep];
+        const hasReadyPattern = !!command.readyPatterns?.[dep.toLowerCase()];
+        const isProcessRunning = this.processStates[dep] === "running";
+        const hasSeenPattern = this.dependencyReady[name]?.[dep.toLowerCase()];
+
+        if (hasReadyPattern) {
+          return !isProcessRunning || !hasSeenPattern;
         }
-        // If no ready pattern, just check if process is running
-        return !this.processReady[dep];
+        return !isProcessRunning;
       });
 
       if (unreadyDeps.length > 0) {
@@ -592,7 +593,6 @@ export class ProcessManager {
 
     this.processes[name] = proc;
     this.processStates[name] = "running";
-    this.processReady[name] = !command.readyPatterns; // Ready immediately if no patterns
     this.setupProcessHandlers(name, proc, command.color);
   }
 
@@ -610,15 +610,18 @@ export class ProcessManager {
       const logData = data.toString();
       this.addLog(name, logData, color);
 
-      // Check output against ready patterns of processes depending on this one
-      this.commands.forEach((cmd) => {
-        if (cmd.dependsOn?.includes(name) && cmd.readyPatterns?.[name]) {
-          const pattern = new RegExp(cmd.readyPatterns[name]);
+      this.commands.forEach((waitingCmd) => {
+        if (
+          waitingCmd.dependsOn?.includes(name) &&
+          waitingCmd.readyPatterns?.[name.toLowerCase()]
+        ) {
+          const pattern = new RegExp(
+            waitingCmd.readyPatterns[name.toLowerCase()]
+          );
           if (pattern.test(logData)) {
-            this.dependencyReady[cmd.name] =
-              this.dependencyReady[cmd.name] || {};
-            this.dependencyReady[cmd.name][name] = true;
-            this.addLog(cmd.name, `Dependency ${name} is ready`, cmd.color);
+            this.dependencyReady[waitingCmd.name] =
+              this.dependencyReady[waitingCmd.name] || {};
+            this.dependencyReady[waitingCmd.name][name.toLowerCase()] = true;
             this.startPendingProcesses();
           }
         }
@@ -632,6 +635,7 @@ export class ProcessManager {
 
     proc.on("error", (error: Error) => {
       this.addLog(name, `Process error: ${error.message}`, color);
+      this.processStates[name] = "stopped";
     });
 
     proc.on("exit", (code: number | null, signal: string | null) => {
@@ -641,12 +645,13 @@ export class ProcessManager {
         this.addLog(name, `Process killed with signal ${signal}`, color);
       }
       this.processStates[name] = "stopped";
-      this.processReady[name] = false;
 
-      // Reset dependency ready states
-      Object.keys(this.dependencyReady).forEach((cmdName) => {
-        if (this.dependencyReady[cmdName][name]) {
-          this.dependencyReady[cmdName][name] = false;
+      // Reset dependency ready states for processes waiting on us
+      this.commands.forEach((cmd) => {
+        if (cmd.dependsOn?.includes(name)) {
+          if (this.dependencyReady[cmd.name]) {
+            this.dependencyReady[cmd.name][name.toLowerCase()] = false;
+          }
         }
       });
     });
@@ -660,15 +665,18 @@ export class ProcessManager {
       const command = this.commands.find((cmd) => cmd.name === name);
       if (!command) continue;
 
-      const unreadyDeps =
-        command.dependsOn?.filter((dep) => {
-          if (command.readyPatterns?.[dep]) {
-            return !this.dependencyReady[name]?.[dep];
-          }
-          return !this.processReady[dep];
-        }) || [];
+      const unreadyDeps = command.dependsOn?.filter((dep) => {
+        const hasReadyPattern = !!command.readyPatterns?.[dep.toLowerCase()];
+        const isProcessRunning = this.processStates[dep] === "running";
+        const hasSeenPattern = this.dependencyReady[name]?.[dep.toLowerCase()];
 
-      if (unreadyDeps.length === 0) {
+        if (hasReadyPattern && (!isProcessRunning || !hasSeenPattern)) {
+          return true;
+        }
+        return !isProcessRunning;
+      });
+
+      if (!unreadyDeps?.length) {
         this.pendingProcesses.delete(name);
         await this.startProcess(name);
       }
