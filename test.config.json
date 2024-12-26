@@ -25,18 +25,6 @@
       }
     }
   ],
-  "groups": [
-    {
-      "name": "BACKEND",
-      "color": "cyan",
-      "commands": ["API"]
-    },
-    {
-      "name": "FRONTEND",
-      "color": "magenta",
-      "commands": ["WEB"]
-    }
-  ],
   "options": {
     "bufferSize": 100,
     "logFile": "test_{timestamp}.log"

@@ -48,10 +48,10 @@
     },
     "groups": {
       "type": "array",
-      "description": "List of command groups",
+      "description": "Optional list of command groups. Groups are automatically created from command 'group' fields, but can be explicitly defined here to customize their properties (like colors)",
       "items": {
         "type": "object",
-        "required": ["name", "commands"],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -64,7 +64,7 @@
           },
           "commands": {
             "type": "array",
-            "description": "List of command names in this group",
+            "description": "List of command names in this group (auto-generated, no need to specify)",
             "items": {
               "type": "string"
             }

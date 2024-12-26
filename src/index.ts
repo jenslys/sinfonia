@@ -917,11 +917,6 @@ program
   .option("-c, --config <file>", "Path to config file", "sinfonia.json")
   .option("-l, --log-file [file]", "Enable logging to file (use {timestamp} for current date/time)")
   .option("-b, --buffer-size <size>", "Number of log lines to keep in memory per process", "100")
-  .option(
-    "--color <colors>",
-    "Colors for each command (comma-separated)",
-    "blue,green,yellow,magenta,cyan"
-  )
   .argument("[commands...]", "Simple commands to run (format: [GROUP:]NAME=COMMAND)")
   .action((commands: string[], options) => {
     let config: Config;
@@ -933,7 +928,7 @@ program
         const parsedConfig: ConfigFile = JSON.parse(configContent);
 
         // Ensure all commands have colors
-        const colors = (parsedConfig.options?.colors || options.color.split(",")).map(
+        const colors = ["blue", "green", "yellow", "magenta", "cyan"].map(
           (c: string) => `\x1b[${getColorCode(c)}m`
         );
         let colorIndex = 0;
@@ -945,18 +940,39 @@ program
             : colors[colorIndex++ % colors.length],
         }));
 
+        // Auto-generate groups from commands while respecting explicit group definitions
+        const autoGroups = new Map<string, Group>();
+
+        // First collect all groups from commands
+        commandsWithColors.forEach((cmd) => {
+          if (cmd.group && !autoGroups.has(cmd.group)) {
+            autoGroups.set(cmd.group, {
+              name: cmd.group,
+              color: colors[colorIndex++ % colors.length],
+              commands: [],
+            });
+          }
+          if (cmd.group) {
+            autoGroups.get(cmd.group)?.commands.push(cmd.name);
+          }
+        });
+
+        // Then override with any explicit group definitions
         const groupsWithColors: Group[] =
           parsedConfig.groups?.map((group) => ({
             ...group,
             color: group.color
               ? `\x1b[${getColorCode(group.color)}m`
-              : colors[colorIndex++ % colors.length],
-          })) || [];
+              : autoGroups.get(group.name)?.color || colors[colorIndex++ % colors.length],
+          })) || Array.from(autoGroups.values());
 
         config = {
           commands: commandsWithColors,
           groups: groupsWithColors,
-          options: parsedConfig.options,
+          options: {
+            bufferSize: Number.parseInt(options.bufferSize, 10),
+            logFile: options.logFile,
+          },
         };
       } catch (_e) {
         console.error(`Failed to read config file: ${_e}`);
@@ -968,7 +984,9 @@ program
       process.exit(1);
     } else {
       // Parse simple commands
-      const colors = options.color.split(",").map((c: string) => `\x1b[${getColorCode(c)}m`);
+      const colors = ["blue", "green", "yellow", "magenta", "cyan"].map(
+        (c: string) => `\x1b[${getColorCode(c)}m`
+      );
       const groups: Group[] = [];
       const parsedCommands: Command[] = [];
       let colorIndex = 0;
@@ -1005,7 +1023,6 @@ program
         commands: parsedCommands,
         groups,
         options: {
-          colors: options.color.split(","),
           bufferSize: Number.parseInt(options.bufferSize, 10),
           logFile: options.logFile,
         },

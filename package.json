@@ -20,7 +20,8 @@
     "test:time": "bun test.js test3",
     "test:all": "bun run src/index.ts -l \"output_{timestamp}.log\" \"counter=bun test.js test1\" \"random=bun test.js test2\" \"time=bun test.js test3\"",
     "test:groups": "bun run src/index.ts \"timers:counter=bun test.js test1\" \"timers:time=bun test.js test3\" \"random:gen1=bun test.js test2\" \"random:gen2=bun test.js test2\"",
-    "test:deps": "bun run src/index.ts -c test.config.json"
+    "test:deps": "bun run src/index.ts -c test.config.json",
+    "test:init": "bun run src/index.ts init"
   },
   "keywords": ["cli", "process-manager", "parallel", "terminal", "interactive"],
   "author": "",

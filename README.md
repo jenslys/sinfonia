@@ -59,9 +59,9 @@ Features available in CLI mode:
 
 - Basic command running (`name=cmd`)
 - Basic grouping (`group:name=cmd`)
-- Global color settings (`--color`)
 - Buffer size (`-b, --buffer-size`)
 - Log file (`-l, --log-file`)
+- Config file (`-c, --config`)
 
 ### Advanced Mode (Config File)
 
@@ -135,13 +135,11 @@ Example config file (`sinfonia.json`):
   "groups": [
     {
       "name": "BACKEND",
-      "color": "cyan",
-      "commands": ["API", "WORKER"]
+      "color": "cyan"
     },
     {
       "name": "FRONTEND",
-      "color": "magenta",
-      "commands": ["WEB"]
+      "color": "magenta"
     }
   ],
   "options": {
@@ -150,22 +148,19 @@ Example config file (`sinfonia.json`):
 }
 ```
 
-The config file supports JSON Schema validation for better IDE support and validation.
+The config file supports JSON Schema validation for better IDE support and validation. Groups are automatically created from command `group` fields - you only need to define them in the `groups` array if you want to customize their properties (like colors).
 
 ### Options
 
 ```bash
-# Custom colors (CLI only)
-sinfonia --color "red,blue,green" "web=npm run dev" "api=npm run server"
-
 # Custom buffer size
 sinfonia -b 200 "web=npm run dev" "api=npm run server"
 
 # Enable logging to file
 sinfonia -l "output_{timestamp}.log" "web=npm run dev" "api=npm run server"
 
-# Use custom config file
-sinfonia -c custom.json
+# Use custom config file (defaults to sinfonia.json)
+sinfonia -c my-config.json
 ```
 
 ## Controls 🎮
