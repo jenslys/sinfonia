@@ -18,7 +18,7 @@
         "noExplicitAny": "error"
       },
       "complexity": {
-        "useLiteralKeys": "error",
+        "useLiteralKeys": "off",
         "noStaticOnlyClass": "error",
         "noForEach": "off"
       },

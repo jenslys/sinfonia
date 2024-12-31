@@ -1,13 +1,21 @@
 import readline from "node:readline";
 import type { Command, Group, Processes } from "../types/index.js";
 import { setupKeyboardHandlers } from "../ui/keyboard.js";
-import { clearScreen, drawControlPanel, hideCursor, showCursor } from "../ui/screen.js";
+import {
+  clearScreen,
+  drawControlPanel,
+  hideCursor,
+  showCursor,
+  PANEL_WIDTH,
+} from "../ui/screen.js";
 import { LifecycleManager, type ProcessState } from "./lifecycle.js";
 import { LogManager, type LogState } from "./logs.js";
 import { SearchManager, type SearchState } from "./search.js";
 
 export class ProcessManager {
   private currentLogLine = 1;
+  private scrollOffset = 0;
+  private isFollowing = true;
   private isCleaningUp = false;
   private isUpdating = false;
 
@@ -139,6 +147,26 @@ export class ProcessManager {
     this.updateScreen();
   }
 
+  public toggleFollow(): void {
+    this.isFollowing = !this.isFollowing;
+    if (this.isFollowing) {
+      const maxScroll = this.logManager.getAllLogs().length - ((process.stdout.rows || 24) - 2);
+      this.scrollOffset = Math.max(0, maxScroll);
+    }
+    this.updateScreen();
+  }
+
+  public scrollLogs(direction: "up" | "down", amount: number): void {
+    this.isFollowing = false;
+    const maxScroll = this.logManager.getAllLogs().length - ((process.stdout.rows || 24) - 2);
+    if (direction === "up") {
+      this.scrollOffset = Math.max(0, this.scrollOffset - amount);
+    } else {
+      this.scrollOffset = Math.min(maxScroll, this.scrollOffset + amount);
+    }
+    this.updateScreen();
+  }
+
   private updateScreen(): void {
     if (this.isUpdating || this.isCleaningUp) return;
     this.isUpdating = true;
@@ -152,7 +180,8 @@ export class ProcessManager {
         this.lifecycleManager.getProcessStates(),
         this.searchManager.isSearchMode(),
         this.searchManager.getSearchBuffer(),
-        this.searchManager.getSearchText()
+        this.searchManager.getSearchText(),
+        this.isFollowing
       );
       this.currentLogLine = 1;
 
@@ -176,7 +205,13 @@ export class ProcessManager {
       logs = this.searchManager.filterLogs(logs);
 
       const maxVisible = (process.stdout.rows || 24) - 2;
-      const visibleLogs = logs.slice(-maxVisible);
+
+      // Always show latest logs when following
+      if (this.isFollowing) {
+        this.scrollOffset = Math.max(0, logs.length - maxVisible);
+      }
+
+      const visibleLogs = logs.slice(this.scrollOffset, this.scrollOffset + maxVisible);
 
       visibleLogs.forEach((log) => {
         this.writeSingleLog(`${log.color}[${log.name}]\x1b[0m ${log.data}`);
@@ -191,7 +226,7 @@ export class ProcessManager {
       return;
     }
 
-    const maxWidth = Math.max(10, (process.stdout.columns || 80) - 30 - 2);
+    const maxWidth = Math.max(10, (process.stdout.columns || 80) - PANEL_WIDTH - 2);
     const lines = data.toString().split("\n");
 
     lines.forEach((line) => {
@@ -223,7 +258,7 @@ export class ProcessManager {
         }
 
         const truncatedLine = line.slice(0, pos);
-        process.stdout.write(`\x1B[${this.currentLogLine};32H${truncatedLine}`);
+        process.stdout.write(`\x1B[${this.currentLogLine};${PANEL_WIDTH + 1}H${truncatedLine}`);
         this.currentLogLine++;
       }
     });

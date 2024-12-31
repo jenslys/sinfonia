@@ -1,6 +1,6 @@
 import type { Command, Group } from "../types/index.js";
 
-export const PANEL_WIDTH = 30;
+export const PANEL_WIDTH = 16;
 
 export function hideCursor(): void {
   process.stdout.write("\x1B[?25l");
@@ -21,7 +21,8 @@ export function drawControlPanel(
   processStates: { [key: string]: "running" | "stopped" },
   searchMode: boolean,
   searchBuffer: string,
-  searchText: string
+  searchText: string,
+  isFollowing: boolean
 ): void {
   const terminalHeight = process.stdout.rows || 24;
 
@@ -30,32 +31,35 @@ export function drawControlPanel(
   }
 
   process.stdout.write(`\x1B[1;1H\x1b[7m Controls \x1b[0m`);
-  process.stdout.write(`\x1B[3;2H[↑/↓] Filter Output`);
-  process.stdout.write(`\x1B[4;2H[r] Restart Process/Group`);
-  process.stdout.write(`\x1B[5;2H[s] Stop/Start`);
-  process.stdout.write(`\x1B[6;2H[f] Search/Filter`);
-  process.stdout.write(`\x1B[7;2H[Ctrl+C] Exit`);
+  process.stdout.write(`\x1B[3;1H↑/↓ Filter`);
+  process.stdout.write(`\x1B[4;1Hr Restart`);
+  process.stdout.write(`\x1B[5;1Hs Start/Stop`);
+  process.stdout.write(`\x1B[6;1Hf Search`);
+  process.stdout.write(`\x1B[7;1Hj/k Scroll`);
+  process.stdout.write(`\x1B[8;1Hu/d Page`);
+  process.stdout.write(`\x1B[9;1H␣ ${isFollowing ? "Manual" : "Follow"}`);
+  process.stdout.write(`\x1B[10;1H^C Exit`);
 
-  process.stdout.write(`\x1B[9;1H\x1b[7m Available Processes \x1b[0m`);
+  process.stdout.write(`\x1B[12;1H\x1b[7m Processes \x1b[0m`);
 
   const isAllSelected = currentFilter === null;
   process.stdout.write(
-    `\x1B[11;2H${isAllSelected ? "▶ " : "  "}\x1b[37m${isAllSelected ? "\x1b[7m" : ""}ALL\x1b[0m`
+    `\x1B[14;1H${isAllSelected ? "▶" : " "}\x1b[37m${isAllSelected ? "\x1b[7m" : ""}ALL\x1b[0m`
   );
 
-  let currentLine = 12;
+  let currentLine = 15;
 
   // Draw groups
   groups.forEach((group) => {
     const isSelected = currentFilter === `group:${group.name}`;
-    const prefix = isSelected ? "▶ " : "  ";
+    const prefix = isSelected ? "▶" : " ";
     const format = isSelected ? `${group.color}\x1b[7m` : group.color;
     const allRunning = group.commands.every((cmd) => processStates[cmd] === "running");
     const allStopped = group.commands.every((cmd) => processStates[cmd] === "stopped");
     const stateIcon = allRunning ? "⚡" : allStopped ? "⏸" : "⚡⏸";
 
     process.stdout.write(
-      `\x1B[${currentLine};2H${prefix}${format}${stateIcon} [${group.name}]\x1b[0m`
+      `\x1B[${currentLine};1H${prefix}${format}${stateIcon}${group.name}\x1b[0m`
     );
     currentLine++;
 
@@ -64,13 +68,13 @@ export function drawControlPanel(
       const cmd = commands.find((c) => c.name === cmdName);
       if (cmd) {
         const isSelected = currentFilter === cmdName;
-        const prefix = isSelected ? "▶ " : "  ";
+        const prefix = isSelected ? "▶" : " ";
         const format = isSelected ? `${cmd.color}\x1b[7m` : cmd.color;
         const state = processStates[cmdName];
         const stateIcon = state === "running" ? "⚡" : "⏸";
 
         process.stdout.write(
-          `\x1B[${currentLine};4H${prefix}${format}${stateIcon} ${cmdName}\x1b[0m`
+          `\x1B[${currentLine};2H${prefix}${format}${stateIcon}${cmdName}\x1b[0m`
         );
         currentLine++;
       }
@@ -81,12 +85,12 @@ export function drawControlPanel(
   const ungroupedCommands = commands.filter((cmd) => !cmd.group);
   ungroupedCommands.forEach(({ name, color }) => {
     const isSelected = currentFilter === name;
-    const prefix = isSelected ? "▶ " : "  ";
+    const prefix = isSelected ? "▶" : " ";
     const format = isSelected ? `${color}\x1b[7m` : color;
     const state = processStates[name];
     const stateIcon = state === "running" ? "⚡" : "⏸";
 
-    process.stdout.write(`\x1B[${currentLine};2H${prefix}${format}${stateIcon} ${name}\x1b[0m`);
+    process.stdout.write(`\x1B[${currentLine};1H${prefix}${format}${stateIcon}${name}\x1b[0m`);
     currentLine++;
   });
 
@@ -98,20 +102,20 @@ function drawSearchBox(searchMode: boolean, searchBuffer: string, searchText: st
     const searchPrompt = "Search: ";
     const searchY = process.stdout.rows - 4;
 
-    process.stdout.write(`\x1B[${searchY};2H┌${"─".repeat(PANEL_WIDTH - 4)}┐`);
+    process.stdout.write(`\x1B[${searchY};1H┌${"─".repeat(PANEL_WIDTH - 3)}┐`);
     process.stdout.write(
-      `\x1B[${searchY + 1};2H│ ${searchPrompt}${searchBuffer}${" ".repeat(
-        PANEL_WIDTH - 4 - searchPrompt.length - searchBuffer.length - 2
-      )} │`
+      `\x1B[${searchY + 1};1H│${searchPrompt}${searchBuffer}${" ".repeat(
+        PANEL_WIDTH - 3 - searchPrompt.length - searchBuffer.length - 2
+      )}│`
     );
-    process.stdout.write(`\x1B[${searchY + 2};2H└${"─".repeat(PANEL_WIDTH - 4)}┘`);
-    process.stdout.write(`\x1B[${searchY + 3};2H\x1b[90m[Enter] Submit · [Esc] Cancel\x1b[0m`);
+    process.stdout.write(`\x1B[${searchY + 2};1H└${"─".repeat(PANEL_WIDTH - 3)}┘`);
+    process.stdout.write(`\x1B[${searchY + 3};1H\x1b[90m[Enter] Submit · [Esc] Cancel\x1b[0m`);
 
-    process.stdout.write(`\x1B[${searchY + 1};${4 + searchPrompt.length + searchBuffer.length}H`);
+    process.stdout.write(`\x1B[${searchY + 1};${3 + searchPrompt.length + searchBuffer.length}H`);
   }
 
   if (searchText) {
     const filterY = process.stdout.rows - 5;
-    process.stdout.write(`\x1B[${filterY};2H\x1b[33mFilter: ${searchText}\x1b[0m`);
+    process.stdout.write(`\x1B[${filterY};1H\x1b[33mFilter: ${searchText}\x1b[0m`);
   }
 }

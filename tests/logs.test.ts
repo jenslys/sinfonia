@@ -3,6 +3,7 @@ import { chmodSync, existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { file } from "bun";
 import { LogManager, type LogState } from "../src/process/logs.js";
+import { ProcessManager } from "../src/process/manager.js";
 
 describe("Logs", () => {
   let logManager: LogManager;
@@ -139,5 +140,68 @@ describe("Logs", () => {
 
     await logManager.flushLogs();
     expect(state.logQueue).toHaveLength(0);
+  });
+});
+
+describe("ProcessManager Logs", () => {
+  test("should handle scrolling logs", () => {
+    const manager = new ProcessManager([{ name: "TEST", cmd: "echo test", color: "\x1b[34m" }]);
+
+    // Terminal height is 24 lines by default
+    // 2 lines reserved for UI elements
+    // So we can show max 22 lines of logs
+    // Adding 30 logs ensures we have enough to scroll
+    for (let i = 0; i < 30; i++) {
+      manager["logManager"].addLog("TEST", `Log line ${i}`, "\x1b[34m");
+    }
+
+    // Initially should be in follow mode (showing last 22 lines)
+    expect(manager["isFollowing"]).toBe(true);
+
+    // Scroll up should disable follow mode
+    manager.scrollLogs("up", 1);
+    expect(manager["isFollowing"]).toBe(false);
+
+    // Check scroll bounds
+    manager.scrollLogs("up", 100); // Try to scroll past start
+    expect(manager["scrollOffset"]).toBe(0);
+
+    manager.scrollLogs("down", 100); // Try to scroll past end
+    // maxScroll = totalLogs(30) - visibleLines(22) = 8
+    const maxScroll = manager["logManager"].getAllLogs().length - ((process.stdout.rows || 24) - 2);
+    expect(manager["scrollOffset"]).toBe(maxScroll);
+  });
+
+  test("should handle follow mode", () => {
+    const manager = new ProcessManager([{ name: "TEST", cmd: "echo test", color: "\x1b[34m" }]);
+
+    // Add initial logs
+    for (let i = 0; i < 30; i++) {
+      manager["logManager"].addLog("TEST", `Log line ${i}`, "\x1b[34m");
+    }
+
+    // Scroll up to disable follow
+    manager.scrollLogs("up", 10);
+    expect(manager["isFollowing"]).toBe(false);
+
+    // Toggle follow back on
+    manager.toggleFollow();
+    expect(manager["isFollowing"]).toBe(true);
+
+    // Should jump to latest logs
+    const maxScroll = manager["logManager"].getAllLogs().length - ((process.stdout.rows || 24) - 2);
+    expect(manager["scrollOffset"]).toBe(maxScroll);
+
+    // Add more logs while following
+    manager["logManager"].addLog("TEST", "New log line", "\x1b[34m");
+    // Need to recalculate maxScroll after adding new log
+    const newMaxScroll =
+      manager["logManager"].getAllLogs().length - ((process.stdout.rows || 24) - 2);
+
+    // Force an update to ensure scroll position is updated
+    manager.toggleFollow();
+    manager.toggleFollow();
+
+    expect(manager["scrollOffset"]).toBe(newMaxScroll);
   });
 });

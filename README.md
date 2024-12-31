@@ -171,7 +171,20 @@ sinfonia -c my-config.json
 | `r`      | Restart process/group |
 | `s`      | Stop/Start process/group |
 | `f`      | Search in logs |
+| `j/k`    | Scroll logs up/down |
+| `u/d`    | Page up/down (half screen) |
+| `Space`  | Toggle auto-follow logs |
 | `Ctrl+C` | Exit all processes   |
+
+### Log Navigation
+
+The log viewer supports both manual and auto-follow modes:
+
+- Use `j/k` for line-by-line scrolling
+- Use `u/d` for faster page-based scrolling
+- Press `Space` to toggle between manual scrolling and auto-follow mode
+- Auto-follow mode automatically shows the latest logs as they arrive
+- Any scroll action automatically switches to manual mode
 
 ## Preview
 

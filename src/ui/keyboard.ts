@@ -52,6 +52,34 @@ function handleNormalMode(key: { name?: string; ctrl?: boolean }, manager: Proce
     return;
   }
 
+  // Vim-style scrolling
+  if (key.name === "j") {
+    manager.scrollLogs("down", 1);
+    return;
+  }
+
+  if (key.name === "k") {
+    manager.scrollLogs("up", 1);
+    return;
+  }
+
+  // Half-page scrolling
+  if (key.name === "d") {
+    manager.scrollLogs("down", Math.floor((process.stdout.rows || 24) / 2));
+    return;
+  }
+
+  if (key.name === "u") {
+    manager.scrollLogs("up", Math.floor((process.stdout.rows || 24) / 2));
+    return;
+  }
+
+  // Toggle follow mode
+  if (key.name === "space") {
+    manager.toggleFollow();
+    return;
+  }
+
   if (key.name === "r" && manager.getCurrentFilter()) {
     const filter = manager.getCurrentFilter();
     if (filter?.startsWith("group:")) {
