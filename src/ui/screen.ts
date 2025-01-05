@@ -1,5 +1,10 @@
 import type { Command, Group } from "../types/index.js";
 
+// Force UTF-8 encoding and en_US locale
+process.env.LANG = "en_US.UTF-8";
+process.env.LC_ALL = "en_US.UTF-8";
+process.env.LC_CTYPE = "en_US.UTF-8";
+
 export const PANEL_WIDTH = 16;
 
 export function hideCursor(): void {
