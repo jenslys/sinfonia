@@ -1,6 +1,6 @@
 {
   "name": "sinfonia",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "A beautiful process runner for parallel commands with interactive filtering",
   "module": "dist/index.js",
   "type": "module",
