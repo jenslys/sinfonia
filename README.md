@@ -1,29 +1,28 @@
-# sinfonia 🎵
+# sinfonia
 
-A beautiful process runner for parallel commands with interactive filtering and real-time output control.
+A modern, interactive process manager for developers.
 
 [![npm version](https://badge.fury.io/js/sinfonia.svg)](https://badge.fury.io/js/sinfonia)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 
+![Preview](https://github.com/user-attachments/assets/5fadbe2d-8a22-4c18-af7f-9f8455e73bfa)
+
 > **sinfonia** _(n.)_ - from Italian, meaning "symphony": a harmonious combination of elements working together as one, just like an orchestra performing multiple parts in perfect coordination.
 
-## Features ✨
+## Features
 
-- 🚀 Run multiple commands in parallel with a single terminal window
-- 👥 Group related processes for better organization
-- 🎯 Filter and focus on specific process or group outputs using arrow keys
-- 🎨 Search through logs and process names in real-time
-- 🎨 Color-coded outputs for easy process identification
-- ⌨️ Interactive process/group control (start/stop/restart)
-- 📊 Real-time output monitoring
-- 🔄 Process state management
-- 💾 Configurable output buffer size
-- 🔗 Optional dependency ordering with ready state detection (via config file)
-- 📝 Automatic log file generation with customizable paths
-- 📋 JSON Schema for config file validation and IDE support
+- **Parallel Execution:** Execute and monitor multiple commands concurrently in a single terminal session.
+- **Process Grouping:** Organize related services (e.g., "frontend", "backend") for bulk control and isolated filtering.
+- **Dependency Management:** Define start orders and wait conditions (e.g., wait for DB port) using a declarative configuration.
+- **Interactive Filtering:** Focus on specific process or group outputs using arrow keys.
+- **Real-time Search:** Search through logs and process names instantly.
+- **Process Control:** Interactively start, stop, and restart individual processes or entire groups.
+- **State Management:** Robust handling of process lifecycles and states.
+- **Configurable Output:** Customize buffer sizes and log file paths.
+- **JSON Schema:** Full IDE support with validation for configuration files.
 
-## Installation 📦
+## Installation
 
 ```bash
 # Using bun
@@ -36,13 +35,13 @@ npm install -g sinfonia
 yarn global add sinfonia
 ```
 
-## Usage 🛠️
+## Usage
 
-Sinfonia offers two modes of operation:
+Sinfonia supports both quick ad-hoc commands and robust declarative configurations.
 
-### Simple Mode (CLI)
+### Ad-hoc Execution (CLI)
 
-For basic usage without dependencies:
+Perfect for simple usage without dependencies:
 
 ```bash
 # Single command
@@ -55,15 +54,14 @@ sinfonia "web=npm run dev" "api=npm run server"
 sinfonia "frontend:web=npm run dev" "backend:api=npm run server"
 ```
 
-Features available in CLI mode:
-
+**CLI Features:**
 - Basic command running (`name=cmd`)
 - Basic grouping (`group:name=cmd`)
 - Buffer size (`-b, --buffer-size`)
 - Log file (`-l, --log-file`)
 - Config file (`-c, --config`)
 
-### Advanced Mode (Config File)
+### Declarative Configuration (sinfonia.json)
 
 For complex setups with dependencies, use a config file. You can generate a starter config with:
 
@@ -85,9 +83,8 @@ sinfonia
 sinfonia -c custom.json
 ```
 
-Additional features in config mode:
-
-- Everything from CLI mode
+**Config Mode Features:**
+- All CLI features
 - Dependencies between commands (`dependsOn`)
 - Ready patterns for dependencies (`readyPatterns`)
 - Per-command and per-group color customization
@@ -163,7 +160,7 @@ sinfonia -l "output_{timestamp}.log" "web=npm run dev" "api=npm run server"
 sinfonia -c my-config.json
 ```
 
-## Controls 🎮
+## Controls
 
 | Key      | Action                |
 |----------|----------------------|
@@ -186,10 +183,6 @@ The log viewer supports both manual and auto-follow modes:
 - Auto-follow mode automatically shows the latest logs as they arrive
 - Any scroll action automatically switches to manual mode
 
-## Preview
-
-https://github.com/user-attachments/assets/5fadbe2d-8a22-4c18-af7f-9f8455e73bfa
-
-## License 📄
+## License
 
 [MIT](LICENSE)
